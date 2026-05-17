@@ -27,13 +27,13 @@
 // settle time
 #define COL_SETTLE_US 200
 
-// g‚¤ƒsƒ“”ÍˆÍ
+// ä½¿ã†ãƒ”ãƒ³ç¯„å›²
 #define ROWS_USED 4          // A0-A3
 #define COLS_USED 7          // B0-B6
 
 static matrix_row_t matrix[MATRIX_ROWS];
 
-// QMK‚Ìi2c_*‚ª8-bitƒAƒhƒŒƒXˆµ‚¢‚ÌŠÂ‹«‘Îôi<<1j
+// QMKã®i2c_*ãŒ8-bitã‚¢ãƒ‰ãƒ¬ã‚¹æ‰±ã„ã®ç’°å¢ƒå¯¾ç­–ï¼ˆ<<1ï¼‰
 static bool mcp_write(uint8_t addr7, uint8_t reg, uint8_t data) {
     uint8_t addr8 = (uint8_t)(addr7 << 1);
     return i2c_write_register(addr8, reg, &data, 1, 50) == I2C_STATUS_SUCCESS;
@@ -49,22 +49,22 @@ static bool mcp_ping(uint8_t addr7) {
 
 static bool right_present = false;
 
-// ROW2COL ‘O’ñ
-// - COL (B0-B6): o—Í‚Å1–{‚¾‚¯LOWi‘¼‚ÍHIGHj
-// - ROW (A0-A3): “ü—Íƒvƒ‹ƒAƒbƒv‚Å“Ç‚ŞiLOW=‰Ÿ‰ºj
+// ROW2COL å‰æ
+// - COL (B0-B6): å‡ºåŠ›ã§1æœ¬ã ã‘LOWï¼ˆä»–ã¯HIGHï¼‰
+// - ROW (A0-A3): å…¥åŠ›ãƒ—ãƒ«ã‚¢ãƒƒãƒ—ã§èª­ã‚€ï¼ˆLOW=æŠ¼ä¸‹ï¼‰
 static void mcp_init_row2col(uint8_t addr7) {
     (void)mcp_write(addr7, IOCON, 0x00);
 
-    // A: rows input (A0-3=1), A4-7 input‚Ì‚Ü‚Ü
+    // A: rows input (A0-3=1), A4-7 inputã®ã¾ã¾
     (void)mcp_write(addr7, IODIRA, 0xFF);
-    // A0-3 pullup ONi‘¼‚Í•s—v‚È‚ç0‚Å‚àOK‚¾‚ªˆÀ‘S‚É‘SONj
+    // A0-3 pullup ONï¼ˆä»–ã¯ä¸è¦ãªã‚‰0ã§ã‚‚OKã ãŒå®‰å…¨ã«å…¨ONï¼‰
     (void)mcp_write(addr7, GPPUA, 0xFF);
 
-    // B: cols output (B0-6=0), B7 input(1)‚ÅOK
+    // B: cols output (B0-6=0), B7 input(1)ã§OK
     // IODIR bit: 1=input, 0=output
     // B0-6 = output -> 0, B7 = input -> 1  => 0b1000_0000 = 0x80
     (void)mcp_write(addr7, IODIRB, 0x80);
-    // o—Í‚È‚Ì‚Åƒvƒ‹ƒAƒbƒv‚Í•s—vi“ü‚ê‚È‚¢j
+    // å‡ºåŠ›ãªã®ã§ãƒ—ãƒ«ã‚¢ãƒƒãƒ—ã¯ä¸è¦ï¼ˆå…¥ã‚Œãªã„ï¼‰
     (void)mcp_write(addr7, GPPUB, 0x00);
 
     // cols all HIGH (inactive): B0-6=1
@@ -77,7 +77,7 @@ static inline void cols_all_high(uint8_t addr7) {
 
 // col_index: 0..6
 static inline void drive_col_low(uint8_t addr7, uint8_t col_index) {
-    // B0-6: 1=HIGH, 0=LOW. 1–{‚¾‚¯LOWB
+    // B0-6: 1=HIGH, 0=LOW. 1æœ¬ã ã‘LOWã€‚
     uint8_t mask = (uint8_t)(0x7F & ~(1u << col_index));
     (void)mcp_write(addr7, OLATB, mask);
 }
@@ -93,7 +93,7 @@ void keyboard_post_init_kb(void) {
     bool okR = mcp_ping(MCP_R);
     LOG("POST_INIT MCP okL=%d okR=%d\n", okL, okR);
 
-    // I2C scaniŒ©‚Â‚¯‚½‚ço‚·j
+    // I2C scanï¼ˆè¦‹ã¤ã‘ãŸã‚‰å‡ºã™ï¼‰
     for (uint8_t a7 = 0x08; a7 < 0x78; a7++) {
         if (mcp_ping(a7)) {
             LOG("I2C found (7bit): 0x%02X\n", a7);
@@ -109,10 +109,10 @@ void matrix_init(void) {
         matrix[r] = 0;
     }
 
-    // ¶‚Í•K{
+    // å·¦ã¯å¿…é ˆ
     mcp_init_row2col(MCP_L);
 
-    // ‰E‚Í‘¶İ‚·‚é‚¾‚¯
+    // å³ã¯å­˜åœ¨ã™ã‚‹æ™‚ã ã‘
     right_present = mcp_ping(MCP_R);
     if (right_present) {
         mcp_init_row2col(MCP_R);
@@ -126,10 +126,10 @@ void matrix_init(void) {
 uint8_t matrix_scan(void) {
     bool changed = false;
 
-    // cols (B0-B6) ‚ğ‡‚ÉLOW‚É‚µ‚ÄArows(A0-A3)‚ğ“Ç‚Ş
+    // cols (B0-B6) ã‚’é †ã«LOWã«ã—ã¦ã€rows(A0-A3)ã‚’èª­ã‚€
     for (uint8_t col = 0; col < COLS_USED; col++) {
 
-        // ¶/‰E ‚»‚ê‚¼‚ê“¯‚¶col‚ğLOW‚É‚·‚é
+        // å·¦/å³ ãã‚Œãã‚ŒåŒã˜colã‚’LOWã«ã™ã‚‹
         drive_col_low(MCP_L, col);
         if (right_present) {
             drive_col_low(MCP_R, col);
@@ -137,7 +137,7 @@ uint8_t matrix_scan(void) {
 
         wait_us(COL_SETTLE_US);
 
-        // row“Ç‚İæ‚èFLOW=‰Ÿ‰º
+        // rowèª­ã¿å–ã‚Šï¼šLOW=æŠ¼ä¸‹
         uint8_t rowA_L = 0xFF, rowA_R = 0xFF;
         bool okL = mcp_read(MCP_L, GPIOA, &rowA_L);
         bool okR = right_present ? mcp_read(MCP_R, GPIOA, &rowA_R) : false;
@@ -145,17 +145,17 @@ uint8_t matrix_scan(void) {
         uint8_t pressed_rows_L = okL ? (uint8_t)((~rowA_L) & 0x0F) : 0; // A0-3
         uint8_t pressed_rows_R = okR ? (uint8_t)((~rowA_R) & 0x0F) : 0;
 
-        // matrix[row] ‚ÌŠY“–ƒrƒbƒg‚ğXV‚·‚é
-        // cols: ¶=0..6, ‰E=7..13i<<7j
+        // matrix[row] ã®è©²å½“ãƒ“ãƒƒãƒˆã‚’æ›´æ–°ã™ã‚‹
+        // cols: å·¦=0..6, å³=7..13ï¼ˆ<<7ï¼‰
         for (uint8_t row = 0; row < ROWS_USED; row++) {
             matrix_row_t old = matrix[row];
             matrix_row_t newv = old;
 
-            // ¶‘¤ col
+            // å·¦å´ col
             if (pressed_rows_L & (1u << row)) newv |=  (matrix_row_t)(1u << col);
             else                              newv &= ~(matrix_row_t)(1u << col);
 
-            // ‰E‘¤ coli‰E–¢Š®¬‚È‚çí‚É0j
+            // å³å´ colï¼ˆå³æœªå®Œæˆãªã‚‰å¸¸ã«0ï¼‰
             if (right_present) {
                 uint8_t bit = (uint8_t)(7 + col);
                 if (pressed_rows_R & (1u << row)) newv |=  (matrix_row_t)(1u << bit);
@@ -169,7 +169,7 @@ uint8_t matrix_scan(void) {
 #ifdef CONSOLE_ENABLE
                 matrix_row_t diff = old ^ newv;
 
-                // ¶‘¤ bit 0..6
+                // å·¦å´ bit 0..6
                 if (diff & (matrix_row_t)(1u << col)) {
                     bool pressed = (newv & (matrix_row_t)(1u << col)) != 0;
                     LOG("%s L row=%u col=%u rawA=0x%02X pressed_rows=0x%X\n",
@@ -177,7 +177,7 @@ uint8_t matrix_scan(void) {
                         row, col, rowA_L, pressed_rows_L);
                 }
 
-                // ‰E‘¤ bit 7..13
+                // å³å´ bit 7..13
                 if (right_present) {
                     uint8_t bit = (uint8_t)(7 + col);
                     if (diff & (matrix_row_t)(1u << bit)) {
@@ -194,7 +194,7 @@ uint8_t matrix_scan(void) {
         }
     }
 
-    // ‰ğœFcols‚ğ‘S•”HIGH
+    // è§£é™¤ï¼šcolsã‚’å…¨éƒ¨HIGH
     cols_all_high(MCP_L);
     if (right_present) {
         cols_all_high(MCP_R);
