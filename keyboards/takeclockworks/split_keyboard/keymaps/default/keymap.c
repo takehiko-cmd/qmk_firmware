@@ -19,69 +19,100 @@ enum custom_keycodes {
     FN3_F23,
 };
 
-#define FN1_F21_DELAY_MS 500
+#define FN_KEY_DELAY_MS 500
 
-static uint16_t fn1_timer;
-static uint8_t fn1_press_count;
-static bool fn1_f21_registered;
+enum fn_key_indexes {
+    FN_KEY_1 = 0,
+    FN_KEY_2,
+    FN_KEY_3,
+    FN_KEY_COUNT,
+};
 
-static void handle_fn_key(uint16_t keycode, bool pressed) {
-    switch (keycode) {
-        case FN1_F21:
-            if (pressed) {
-                if (fn1_press_count == 0) {
-                    fn1_timer = timer_read();
-                    fn1_f21_registered = false;
-                }
-                fn1_press_count++;
-                layer_on(_FN1);
-            } else {
-                if (fn1_press_count > 0) {
-                    fn1_press_count--;
-                }
-                if (fn1_press_count == 0) {
-                    if (fn1_f21_registered) {
-                        unregister_code(KC_F21);
-                        fn1_f21_registered = false;
-                    }
-                    layer_off(_FN1);
-                }
+static const uint8_t fn_layers[FN_KEY_COUNT] = {
+    _FN1,
+    _FN2,
+    _FN3,
+};
+
+static const uint8_t fn_output_keycodes[FN_KEY_COUNT] = {
+    KC_F21,
+    KC_F22,
+    KC_F23,
+};
+
+static uint16_t fn_timers[FN_KEY_COUNT];
+static uint8_t  fn_press_counts[FN_KEY_COUNT];
+static bool     fn_registered[FN_KEY_COUNT];
+static bool     fn_output_suppressed[FN_KEY_COUNT];
+static bool     fn12_f20_tapped;
+
+static void release_registered_fn_output(uint8_t fn_index) {
+    if (fn_registered[fn_index]) {
+        unregister_code(fn_output_keycodes[fn_index]);
+        fn_registered[fn_index] = false;
+    }
+}
+
+static void tap_fn12_f20_if_chorded(void) {
+    if (fn12_f20_tapped || fn_press_counts[FN_KEY_1] == 0 || fn_press_counts[FN_KEY_2] == 0) {
+        return;
+    }
+
+    release_registered_fn_output(FN_KEY_1);
+    release_registered_fn_output(FN_KEY_2);
+    fn_output_suppressed[FN_KEY_1] = true;
+    fn_output_suppressed[FN_KEY_2] = true;
+    tap_code(KC_F20);
+    fn12_f20_tapped = true;
+}
+
+static void handle_delayed_fn_key(uint8_t fn_index, bool pressed) {
+    if (pressed) {
+        if (fn_press_counts[fn_index] == 0) {
+            fn_timers[fn_index]     = timer_read();
+            fn_registered[fn_index] = false;
+        }
+        fn_press_counts[fn_index]++;
+        layer_on(fn_layers[fn_index]);
+        tap_fn12_f20_if_chorded();
+    } else {
+        if (fn_press_counts[fn_index] > 0) {
+            fn_press_counts[fn_index]--;
+        }
+        if (fn_press_counts[fn_index] == 0) {
+            release_registered_fn_output(fn_index);
+            fn_output_suppressed[fn_index] = false;
+            if (fn_index == FN_KEY_1 || fn_index == FN_KEY_2) {
+                fn12_f20_tapped = false;
             }
-            break;
-        case FN2_F22:
-            if (pressed) {
-                tap_code(KC_F22);
-                layer_on(_FN2);
-            } else {
-                layer_off(_FN2);
-            }
-            break;
-        case FN3_F23:
-            if (pressed) {
-                tap_code(KC_F23);
-                layer_on(_FN3);
-            } else {
-                layer_off(_FN3);
-            }
-            break;
+            layer_off(fn_layers[fn_index]);
+        }
     }
 }
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     switch (keycode) {
         case FN1_F21:
+            handle_delayed_fn_key(FN_KEY_1, record->event.pressed);
+            return false;
         case FN2_F22:
+            handle_delayed_fn_key(FN_KEY_2, record->event.pressed);
+            return false;
         case FN3_F23:
-            handle_fn_key(keycode, record->event.pressed);
+            handle_delayed_fn_key(FN_KEY_3, record->event.pressed);
             return false;
     }
     return true;
 }
 
 void matrix_scan_user(void) {
-    if (fn1_press_count > 0 && !fn1_f21_registered && timer_elapsed(fn1_timer) >= FN1_F21_DELAY_MS) {
-        register_code(KC_F21);
-        fn1_f21_registered = true;
+    tap_fn12_f20_if_chorded();
+
+    for (uint8_t i = 0; i < FN_KEY_COUNT; i++) {
+        if (fn_press_counts[i] > 0 && !fn_registered[i] && !fn_output_suppressed[i] && timer_elapsed(fn_timers[i]) >= FN_KEY_DELAY_MS) {
+            register_code(fn_output_keycodes[i]);
+            fn_registered[i] = true;
+        }
     }
 }
 

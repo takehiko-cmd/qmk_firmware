@@ -34,6 +34,18 @@ static bool     i2c_scan_enabled = false;
 static bool     right_present    = false;
 static uint32_t right_retry_time = 0;
 
+__attribute__((weak)) void matrix_init_kb(void) {
+    matrix_init_user();
+}
+
+__attribute__((weak)) void matrix_scan_kb(void) {
+    matrix_scan_user();
+}
+
+__attribute__((weak)) void matrix_init_user(void) {}
+
+__attribute__((weak)) void matrix_scan_user(void) {}
+
 static bool mcp_write(uint8_t addr7, uint8_t reg, uint8_t data) {
     uint8_t addr8 = (uint8_t)(addr7 << 1);
     return i2c_write_register(addr8, reg, &data, 1, 50) == I2C_STATUS_SUCCESS;
@@ -139,6 +151,7 @@ void keyboard_post_init_kb(void) {
 void matrix_init(void) {
     clear_matrix();
     try_enable_i2c_scan();
+    matrix_init_kb();
 }
 
 uint8_t matrix_scan(void) {
@@ -146,6 +159,7 @@ uint8_t matrix_scan(void) {
 
     try_enable_i2c_scan();
     if (!i2c_scan_enabled) {
+        matrix_scan_kb();
         return false;
     }
 
@@ -208,6 +222,8 @@ uint8_t matrix_scan(void) {
     if (right_present) {
         cols_all_high(MCP_R);
     }
+
+    matrix_scan_kb();
 
     return changed;
 }
