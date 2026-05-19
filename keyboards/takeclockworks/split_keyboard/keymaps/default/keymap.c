@@ -126,16 +126,16 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
  */
 [_BASE] = {
     // Row0
-    { KC_ESC,  JP_ZKHK, KC_Q,    KC_W,    KC_E,    KC_R,    KC_T,     KC_Y,    KC_U,    KC_I,    KC_O,    KC_P,    JP_MINS, KC_BSPC },
+    { KC_ESC,  JP_ZKHK, KC_Q,    KC_W,    KC_E,    KC_R,    KC_T,     KC_Y,    KC_U,    KC_I,    KC_O,    KC_P,    KC_UP,   KC_BSPC },
 
     // Row1
-    { KC_TAB,  KC_TAB,  KC_A,    KC_S,    KC_D,    KC_F,    KC_G,     KC_H,    KC_J,    KC_K,    KC_L,    JP_QUES, KC_UP,   KC_RGHT },
+    { KC_TAB,  KC_TAB,  KC_A,    KC_S,    KC_D,    KC_F,    KC_G,     KC_H,    KC_J,    KC_K,    KC_L,    KC_LEFT, KC_DOWN, KC_RGHT },
 
     // Row2
-    { KC_LSFT, KC_LSFT, KC_Z,    KC_X,    KC_C,    KC_V,    KC_B,     KC_N,    KC_M,    JP_COMM, JP_DOT,  KC_LEFT, KC_DOWN, KC_RGHT },
+    { KC_LSFT, KC_LSFT, KC_Z,    KC_X,    KC_C,    KC_V,    KC_B,     KC_N,    KC_M,    JP_MINS, JP_COMM, JP_DOT,  JP_QUES, KC_RSFT },
 
     // Row3
-    { KC_LCTL, KC_LALT, _______,  FN3_F23,  FN2_F22,  FN1_F21, KC_SPC,  KC_ENT,  FN1_F21,  FN2_F22,  FN3_F23,  _______,  KC_RALT, KC_RCTL }
+    { KC_LCTL, KC_LALT, KC_LGUI,  FN3_F23,  FN2_F22,  FN1_F21, KC_SPC,  KC_ENT,  FN1_F21,  FN2_F22,  FN3_F23,  _______,  KC_RALT, KC_RCTL }
 },
 
 /*
@@ -144,13 +144,13 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
  */
 [_FN1] = {
     // Row0
-    { KC_ESC,  JP_EXLM, JP_DQUO, JP_HASH, JP_DLR,  JP_PERC, JP_PIPE,  KC_7,    KC_8,    KC_9,    JP_ASTR, JP_SLSH, KC_PSCR, KC_DEL  },
+    { KC_ESC,  JP_EXLM, JP_DQUO, JP_HASH, JP_DLR,  JP_PERC, KC_PSCR, KC_7,    KC_8,    KC_9,    JP_ASTR, JP_SLSH, KC_PGUP, KC_DEL  },
 
     // Row1
-    { KC_TAB,  JP_AMPR, JP_YEN,  JP_TILD, JP_CIRC, JP_LPRN, JP_RPRN,  KC_4,    KC_5,    KC_6,    JP_PLUS, _______, KC_RGUI, KC_INS  },
+    { KC_TAB,  JP_AMPR, JP_YEN,  JP_TILD, JP_CIRC, JP_LPRN, JP_RPRN,  KC_4,    KC_5,    KC_6,    JP_PLUS, JP_MINS, KC_PGDN, KC_INS  },
 
     // Row2
-    { KC_LSFT, JP_SCLN, JP_COLN, JP_LBRC, JP_RBRC, JP_AT,   JP_COMM,  KC_1,    KC_2,    KC_3,    JP_DOT,  JP_EQL,  _______, KC_RSFT },
+    { KC_LSFT, JP_SCLN, JP_COLN, JP_LBRC, JP_RBRC, JP_AT,   JP_COMM,  KC_1,    KC_2,    KC_3,    JP_DOT,  JP_EQL,  JP_PIPE, KC_RSFT },
 
     // Row3
     { KC_LCTL, KC_LALT, _______, _______, _______, _______, KC_SPC,   KC_ENT,  KC_0,    _______, _______, _______, KC_RALT, KC_RCTL }
