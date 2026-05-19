@@ -126,70 +126,70 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
  */
 [_BASE] = {
     // Row0
-    { KC_ESC,  KC_Q,    KC_W,    KC_E,    KC_R,    KC_T,    JP_ZKHK,  KC_BSPC,  KC_Y,    KC_U,    KC_I,    KC_O,    KC_P,    JP_SLSH },
+    { KC_ESC,  JP_ZKHK, KC_Q,    KC_W,    KC_E,    KC_R,    KC_T,     KC_Y,    KC_U,    KC_I,    KC_O,    KC_P,    JP_MINS, KC_BSPC },
 
     // Row1
-    { KC_TAB,  KC_A,    KC_S,    KC_D,    KC_F,    KC_G,    KC_LGUI,  KC_INS, KC_H,    KC_J,    KC_K,    KC_L,    JP_MINS, JP_PLUS },
+    { KC_TAB,  KC_TAB,  KC_A,    KC_S,    KC_D,    KC_F,    KC_G,     KC_H,    KC_J,    KC_K,    KC_L,    JP_QUES, KC_UP,   KC_RGHT },
 
     // Row2
-    { KC_LSFT, KC_Z,    KC_X,    KC_C,    KC_V,    KC_B,    KC_DEL,   KC_PSCR, KC_N,    KC_M,    JP_COMM, JP_DOT,  JP_UNDS, KC_RSFT },
+    { KC_LSFT, KC_LSFT, KC_Z,    KC_X,    KC_C,    KC_V,    KC_B,     KC_N,    KC_M,    JP_COMM, JP_DOT,  KC_LEFT, KC_DOWN, KC_RGHT },
 
     // Row3
-    { KC_LCTL, KC_LALT, FN3_F23,  FN2_F22,  FN1_F21,  KC_SPC, KC_ENT,  KC_ENT,  KC_SPC,  FN1_F21,  FN2_F22,  FN3_F23,  KC_RALT, KC_RCTL }
+    { KC_LCTL, KC_LALT, _______,  FN3_F23,  FN2_F22,  FN1_F21, KC_SPC,  KC_ENT,  FN1_F21,  FN2_F22,  FN3_F23,  _______,  KC_RALT, KC_RCTL }
 },
 
 /*
  * [1] Fn1
- * Navigation / Boot layer
+ * Symbols / numbers
  */
 [_FN1] = {
-    // Row0: Boot
-    { QK_BOOT, _______, _______, _______, _______, _______, _______,  _______, _______, _______, _______, _______, _______, QK_BOOT },
+    // Row0
+    { KC_ESC,  JP_EXLM, JP_DQUO, JP_HASH, JP_DLR,  JP_PERC, JP_PIPE,  KC_7,    KC_8,    KC_9,    JP_ASTR, JP_SLSH, KC_PSCR, KC_DEL  },
 
-    // Row1: Ins / Del / Up / Back
-    { _______, _______, KC_INS,  KC_DEL,  KC_UP,   KC_BSPC, _______,  KC_INS,  KC_DEL,  KC_UP,   KC_BSPC, _______, _______, _______ },
+    // Row1
+    { KC_TAB,  JP_AMPR, JP_YEN,  JP_TILD, JP_CIRC, JP_LPRN, JP_RPRN,  KC_4,    KC_5,    KC_6,    JP_PLUS, _______, KC_RGUI, KC_INS  },
 
-    // Row2: Home / Left / Down / Right / End
-    { _______, _______, KC_HOME, KC_LEFT, KC_DOWN, KC_RGHT, KC_END,   KC_HOME, KC_LEFT, KC_DOWN, KC_RGHT, KC_END,  _______, _______ },
+    // Row2
+    { KC_LSFT, JP_SCLN, JP_COLN, JP_LBRC, JP_RBRC, JP_AT,   JP_COMM,  KC_1,    KC_2,    KC_3,    JP_DOT,  JP_EQL,  _______, KC_RSFT },
 
-    // Row3: Ctrl / Alt / Space / Enter
-    { KC_LCTL, KC_LALT, _______, _______, _______, KC_SPC,  KC_ENT,   KC_ENT,  KC_SPC,  _______, _______, _______, KC_RALT, KC_RCTL }
+    // Row3
+    { KC_LCTL, KC_LALT, _______, _______, _______, _______, KC_SPC,   KC_ENT,  KC_0,    _______, _______, _______, KC_RALT, KC_RCTL }
 },
 
 /*
  * [2] Fn2
- * Symbol / Numpad layer
+ * Function keys
  */
 [_FN2] = {
     // Row0
-    { _______, JP_EXLM, JP_DQUO, JP_HASH, JP_DLR,  JP_PERC, _______,  KC_NUM,  KC_P7,   KC_P8,   KC_P9,   KC_PAST, KC_PSLS, _______ },
+    { KC_ESC,  KC_F1,   KC_F2,   KC_F3,   KC_F4,   KC_F5,   KC_F6,    KC_F7,   KC_F8,   KC_F9,   KC_F10,  KC_F11,  KC_F12,  _______ },
 
     // Row1
-    { _______, JP_AMPR, JP_QUOT, JP_TILD, JP_PIPE, JP_CIRC, _______,  _______, KC_P4,   KC_P5,   KC_P6,   KC_PPLS, KC_PMNS, _______ },
+    { KC_TAB,  _______, _______, _______, _______, _______, _______,   _______, _______, _______, _______, _______, _______, KC_RSFT },
 
     // Row2
-    { _______, JP_LBRC, JP_RBRC, JP_SCLN, JP_COLN, JP_AT,   _______,  _______, KC_P1,   KC_P2,   KC_P3,   KC_PEQL, _______, _______ },
+    { KC_LSFT, _______, _______, _______, _______, _______, _______,   _______, _______, _______, _______, _______, _______, KC_RCTL },
 
     // Row3
-    { KC_LCTL, KC_LALT, _______, _______, _______, KC_SPC,  KC_ENT,   _______, KC_P0,   _______, KC_PDOT, _______, _______, _______ }
+    { KC_LCTL, KC_LALT, _______, _______, _______, _______, KC_SPC,   KC_ENT,  _______, _______, _______, _______, KC_RALT, KC_RCTL }
 },
 
 /*
  * [3] Fn3
- * Function key layer
+ * Boot
  */
 [_FN3] = {
     // Row0
-    { KC_F1,   KC_F2,   KC_F3,   KC_F4,   KC_F5,   KC_F6,   _______,  _______, KC_F7,   KC_F8,   KC_F9,   KC_F10,  KC_F11,  KC_F12  },
+    { QK_BOOT, _______, _______, _______, _______, _______, _______,   _______, _______, _______, _______, _______, _______, _______ },
 
     // Row1
-    { _______, _______, _______, _______, _______, _______, _______,  _______, _______, _______, _______, _______, _______, _______ },
+    { KC_TAB,  _______, _______, _______, _______, _______, _______,   _______, _______, _______, _______, _______, _______, KC_RSFT },
 
     // Row2
-    { _______, _______, _______, _______, _______, _______, _______,  _______, _______, _______, _______, _______, _______, _______ },
+    { KC_LSFT, _______, _______, _______, _______, _______, _______,   _______, _______, _______, _______, _______, _______, KC_RCTL },
 
     // Row3
-    { _______, _______, _______, _______, _______, _______, _______,  _______, _______, _______, _______, _______, _______, _______ }
+    { KC_LCTL, KC_LALT, _______, _______, _______, _______, KC_SPC,   KC_ENT,  _______, _______, _______, _______, KC_RALT, KC_RCTL }
 }
 
 };
