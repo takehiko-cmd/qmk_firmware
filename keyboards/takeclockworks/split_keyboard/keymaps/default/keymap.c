@@ -5,6 +5,7 @@
 
 #include QMK_KEYBOARD_H
 #include "keymap_japanese.h"
+#include "raw_hid.h"
 
 enum layers {
     _BASE = 0,
@@ -30,10 +31,10 @@ enum fn_key_indexes {
     FN_KEY_COUNT,
 };
 
-enum active_mode {
-    MODE_BASE = 0,
-    MODE_FN1,
-    MODE_FN2,
+enum layer_slot {
+    SLOT_BASE = 0,
+    SLOT_FN1,
+    SLOT_FN2,
 };
 
 static const uint16_t fn_output_keycodes[FN_KEY_COUNT] = {
@@ -45,42 +46,101 @@ static const uint16_t fn_output_keycodes[FN_KEY_COUNT] = {
 static uint16_t         fn_timers[FN_KEY_COUNT];
 static uint8_t          fn_press_counts[FN_KEY_COUNT];
 static bool             fn_registered[FN_KEY_COUNT];
-static enum active_mode active_mode = MODE_BASE;
-static bool             one_hand_mode;
+static enum layer_slot  active_slot = SLOT_BASE;
+static bool             is_mirror_mode;
+static bool             syncing_layers;
+
+static uint8_t get_effective_app_layer(void) {
+    return (is_mirror_mode ? 3 : 0) + active_slot;
+}
+
+static void send_keyboard_layer_status(void) {
+#if defined(SPLIT_KEYBOARD)
+    if (!is_keyboard_master()) {
+        return;
+    }
+#endif
+
+    uint8_t report[32] = {0};
+    report[0]          = 'K';
+    report[1]          = 'L';
+    report[2]          = 'P';
+    report[3]          = 1;
+    report[4]          = is_mirror_mode ? 1 : 0;
+    report[5]          = active_slot;
+    report[6]          = get_effective_app_layer();
+
+    raw_hid_send(report, sizeof(report));
+}
+
+static void set_status_from_layer(layer_state_t state) {
+    switch (get_highest_layer(state)) {
+        case _FN2_MIRROR:
+            is_mirror_mode = true;
+            active_slot    = SLOT_FN2;
+            break;
+        case _FN1_MIRROR:
+            is_mirror_mode = true;
+            active_slot    = SLOT_FN1;
+            break;
+        case _BASE_MIRROR:
+            is_mirror_mode = true;
+            active_slot    = SLOT_BASE;
+            break;
+        case _FN2:
+            is_mirror_mode = false;
+            active_slot    = SLOT_FN2;
+            break;
+        case _FN1:
+            is_mirror_mode = false;
+            active_slot    = SLOT_FN1;
+            break;
+        case _BASE:
+        default:
+            is_mirror_mode = false;
+            active_slot    = SLOT_BASE;
+            break;
+    }
+}
 
 static void sync_layers(void) {
+    syncing_layers = true;
+
     layer_off(_FN1);
     layer_off(_FN2);
     layer_off(_BASE_MIRROR);
     layer_off(_FN1_MIRROR);
     layer_off(_FN2_MIRROR);
 
-    if (one_hand_mode) {
-        switch (active_mode) {
-            case MODE_FN1:
+    if (is_mirror_mode) {
+        switch (active_slot) {
+            case SLOT_FN1:
                 layer_on(_FN1_MIRROR);
                 break;
-            case MODE_FN2:
+            case SLOT_FN2:
                 layer_on(_FN2_MIRROR);
                 break;
-            case MODE_BASE:
+            case SLOT_BASE:
             default:
                 layer_on(_BASE_MIRROR);
                 break;
         }
     } else {
-        switch (active_mode) {
-            case MODE_FN1:
+        switch (active_slot) {
+            case SLOT_FN1:
                 layer_on(_FN1);
                 break;
-            case MODE_FN2:
+            case SLOT_FN2:
                 layer_on(_FN2);
                 break;
-            case MODE_BASE:
+            case SLOT_BASE:
             default:
                 break;
         }
     }
+
+    syncing_layers = false;
+    send_keyboard_layer_status();
 }
 
 static void release_registered_fn_output(uint8_t fn_index) {
@@ -90,21 +150,21 @@ static void release_registered_fn_output(uint8_t fn_index) {
     }
 }
 
-static void toggle_active_mode(enum active_mode mode) {
-    active_mode = active_mode == mode ? MODE_BASE : mode;
+static void toggle_active_slot(enum layer_slot slot) {
+    active_slot = active_slot == slot ? SLOT_BASE : slot;
     sync_layers();
 }
 
 static void handle_short_fn_tap(uint8_t fn_index) {
     switch (fn_index) {
         case FN_KEY_1:
-            toggle_active_mode(MODE_FN1);
+            toggle_active_slot(SLOT_FN1);
             break;
         case FN_KEY_2:
-            toggle_active_mode(MODE_FN2);
+            toggle_active_slot(SLOT_FN2);
             break;
         case FN_KEY_3:
-            one_hand_mode = !one_hand_mode;
+            is_mirror_mode = !is_mirror_mode;
             sync_layers();
             break;
     }
@@ -164,6 +224,19 @@ void matrix_scan_user(void) {
             fn_registered[i] = true;
         }
     }
+}
+
+layer_state_t layer_state_set_user(layer_state_t state) {
+    if (!syncing_layers) {
+        set_status_from_layer(state);
+        send_keyboard_layer_status();
+    }
+
+    return state;
+}
+
+void keyboard_post_init_user(void) {
+    send_keyboard_layer_status();
 }
 
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
