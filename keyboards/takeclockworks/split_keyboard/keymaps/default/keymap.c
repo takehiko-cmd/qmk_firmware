@@ -366,7 +366,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
  */
 [_FN2] = {
     // Row0
-    { JP_ZKHK, KC_ESC,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   BOOT_HOLD, JP_MINS, JP_COLN, KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_BSPC },
+    { JP_ZKHK, KC_ESC,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   BOOT_HOLD, JP_UNDS, JP_COLN, KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_BSPC },
 
     // Row1
     { KC_PSCR, KC_TAB,  JP_EXLM, JP_DQUO, JP_HASH, JP_DLR,  JP_PERC,  JP_YEN,  JP_TILD, JP_CIRC, JP_LPRN, JP_RPRN, KC_INS,  KC_DEL  },
@@ -418,7 +418,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
  */
 [_FN2_MIRROR] = {
     // Row0
-    { KC_BSPC, KC_NO,   KC_NO,   KC_NO,   KC_NO,   JP_COLN, JP_MINS,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
+    { KC_BSPC, KC_NO,   KC_NO,   KC_NO,   KC_NO,   JP_COLN, JP_UNDS,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
 
     // Row1
     { KC_DEL,  KC_INS,  JP_RPRN, JP_LPRN, JP_CIRC, JP_TILD, JP_YEN,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
