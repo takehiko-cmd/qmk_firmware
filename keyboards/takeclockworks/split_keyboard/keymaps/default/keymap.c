@@ -20,9 +20,11 @@ enum custom_keycodes {
     FN1_F21 = SAFE_RANGE,
     FN2_F22,
     FN3_F23,
+    BOOT_HOLD,
 };
 
 #define FN_KEY_DELAY_MS 1000
+#define BOOT_KEY_DELAY_MS 1000
 
 enum fn_key_indexes {
     FN_KEY_1 = 0,
@@ -49,6 +51,9 @@ static bool             fn_registered[FN_KEY_COUNT];
 static enum layer_slot  active_slot = SLOT_BASE;
 static bool             is_mirror_mode;
 static bool             syncing_layers;
+static uint16_t         boot_timer;
+static bool             boot_pressed;
+static bool             boot_triggered;
 
 static uint8_t get_effective_app_layer(void) {
     return (is_mirror_mode ? 3 : 0) + active_slot;
@@ -213,11 +218,25 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         case FN3_F23:
             handle_fn_key(FN_KEY_3, record->event.pressed);
             return false;
+        case BOOT_HOLD:
+            if (record->event.pressed) {
+                boot_timer     = timer_read();
+                boot_pressed   = true;
+                boot_triggered = false;
+            } else {
+                boot_pressed = false;
+            }
+            return false;
     }
     return true;
 }
 
 void matrix_scan_user(void) {
+    if (boot_pressed && !boot_triggered && timer_elapsed(boot_timer) >= BOOT_KEY_DELAY_MS) {
+        boot_triggered = true;
+        reset_keyboard();
+    }
+
     for (uint8_t i = 0; i < FN_KEY_COUNT; i++) {
         if (fn_press_counts[i] > 0 && !fn_registered[i] && timer_elapsed(fn_timers[i]) >= FN_KEY_DELAY_MS) {
             register_code16(fn_output_keycodes[i]);
@@ -273,10 +292,10 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     { KC_NO,   KC_NO,   KC_F6,   KC_F7,   KC_F8,   KC_F9,   KC_F10,   KC_4,    KC_5,    KC_6,    JP_PLUS, KC_NO,   KC_NO,   KC_DEL  },
 
     // Row2
-    { KC_NO,   KC_NO,   KC_F11,  KC_F12,  KC_NO,   KC_NO,   KC_NO,    KC_1,    KC_2,    KC_3,    KC_0,    JP_DOT,  KC_PGUP, KC_RSFT },
+    { KC_NO,   KC_NO,   KC_F11,  KC_F12,  LCTL(KC_X), LCTL(KC_C), LCTL(KC_V), KC_1,    KC_2,    KC_3,    KC_0,    JP_DOT,  KC_PGUP, KC_RSFT },
 
     // Row3
-    { QK_BOOT, KC_NO,   KC_NO,   FN3_F23, FN2_F22, FN1_F21, KC_SPC,   KC_ENT,  FN1_F21, FN2_F22, FN3_F23, KC_HOME, KC_PGDN, KC_END  }
+    { KC_NO,   KC_NO,   KC_NO,   FN3_F23, FN2_F22, FN1_F21, KC_SPC,   KC_ENT,  FN1_F21, FN2_F22, FN3_F23, KC_HOME, KC_PGDN, KC_END  }
 },
 
 /*
@@ -285,7 +304,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
  */
 [_FN2] = {
     // Row0
-    { JP_ZKHK, KC_ESC,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,    KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_BSPC },
+    { JP_ZKHK, KC_ESC,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   BOOT_HOLD, JP_MINS, KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_BSPC },
 
     // Row1
     { KC_PSCR, KC_TAB,  JP_EXLM, JP_DQUO, JP_HASH, JP_DLR,  JP_PERC,  JP_YEN,  JP_TILD, JP_CIRC, JP_LPRN, JP_RPRN, KC_NO,   KC_DEL  },
@@ -337,7 +356,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
  */
 [_FN2_MIRROR] = {
     // Row0
-    { KC_BSPC, KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,    KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
+    { KC_BSPC, KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   JP_MINS,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
 
     // Row1
     { KC_DEL,  KC_NO,   JP_RPRN, JP_LPRN, JP_CIRC, JP_TILD, JP_YEN,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
