@@ -54,6 +54,14 @@ static bool             syncing_layers;
 static uint16_t         boot_timer;
 static bool             boot_pressed;
 static bool             boot_triggered;
+static bool             ctrl_arrow_consumed[4];
+
+enum ctrl_arrow_index {
+    CTRL_ARROW_UP = 0,
+    CTRL_ARROW_DOWN,
+    CTRL_ARROW_LEFT,
+    CTRL_ARROW_RIGHT,
+};
 
 static uint8_t get_effective_app_layer(void) {
     return (is_mirror_mode ? 3 : 0) + active_slot;
@@ -207,7 +215,61 @@ static void handle_fn_key(uint8_t fn_index, bool pressed) {
     }
 }
 
+static bool handle_ctrl_arrow(uint16_t keycode, keyrecord_t *record) {
+    uint8_t index;
+    uint16_t output_keycode;
+
+    switch (keycode) {
+        case KC_UP:
+            index          = CTRL_ARROW_UP;
+            output_keycode = KC_PGUP;
+            break;
+        case KC_DOWN:
+            index          = CTRL_ARROW_DOWN;
+            output_keycode = KC_PGDN;
+            break;
+        case KC_LEFT:
+            index          = CTRL_ARROW_LEFT;
+            output_keycode = KC_HOME;
+            break;
+        case KC_RGHT:
+            index          = CTRL_ARROW_RIGHT;
+            output_keycode = KC_END;
+            break;
+        default:
+            return true;
+    }
+
+    if (!record->event.pressed) {
+        if (ctrl_arrow_consumed[index]) {
+            ctrl_arrow_consumed[index] = false;
+            return false;
+        }
+        return true;
+    }
+
+    uint8_t mods         = get_mods();
+    uint8_t oneshot_mods = get_oneshot_mods();
+
+    if (((mods | oneshot_mods) & MOD_MASK_CTRL) == 0) {
+        return true;
+    }
+
+    ctrl_arrow_consumed[index] = true;
+    del_mods(MOD_MASK_CTRL);
+    del_oneshot_mods(MOD_MASK_CTRL);
+    tap_code16(output_keycode);
+    set_mods(mods);
+    set_oneshot_mods(oneshot_mods);
+
+    return false;
+}
+
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    if (!handle_ctrl_arrow(keycode, record)) {
+        return false;
+    }
+
     switch (keycode) {
         case FN1_F21:
             handle_fn_key(FN_KEY_1, record->event.pressed);
@@ -268,16 +330,16 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
  */
 [_BASE] = {
     // Row0
-    { KC_BSPC, KC_ESC,  KC_Q,    KC_W,    KC_E,    KC_R,    KC_T,     KC_Y,    KC_U,    KC_I,    KC_O,    KC_P,    JP_MINS, KC_BSPC },
+    { JP_ZKHK, KC_ESC,  KC_Q,    KC_W,    KC_E,    KC_R,    KC_T,     KC_Y,    KC_U,    KC_I,    KC_O,    KC_P,    JP_MINS, KC_BSPC },
 
     // Row1
-    { KC_DEL,  KC_TAB,  KC_A,    KC_S,    KC_D,    KC_F,    KC_G,     KC_H,    KC_J,    KC_K,    KC_L,    JP_SCLN, JP_COLN, KC_DEL  },
+    { KC_F1,   KC_TAB,  KC_A,    KC_S,    KC_D,    KC_F,    KC_G,     KC_H,    KC_J,    KC_K,    KC_L,    JP_SCLN, KC_INS,  KC_DEL  },
 
     // Row2
-    { KC_LGUI, KC_LSFT, KC_Z,    KC_X,    KC_C,    KC_V,    KC_B,     KC_N,    KC_M,    JP_COMM, JP_DOT,  JP_SLSH, KC_UP,   KC_RSFT },
+    { KC_F8,   KC_LSFT, KC_Z,    KC_X,    KC_C,    KC_V,    KC_B,     KC_N,    KC_M,    JP_COMM, JP_DOT,  JP_SLSH, KC_UP,   KC_RSFT },
 
     // Row3
-    { JP_ZKHK, KC_LCTL, KC_LALT, FN3_F23, FN2_F22, FN1_F21, KC_SPC,   KC_ENT,  FN1_F21, FN2_F22, FN3_F23, KC_LEFT, KC_DOWN, KC_RGHT }
+    { KC_LCTL, KC_LGUI, KC_LALT, FN3_F23, FN2_F22, FN1_F21, KC_SPC,   KC_ENT,  FN1_F21, FN2_F22, FN3_F23, KC_LEFT, KC_DOWN, KC_RGHT }
 },
 
 /*
@@ -286,16 +348,16 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
  */
 [_FN1] = {
     // Row0
-    { KC_NO,   KC_INS,  KC_F1,   KC_F2,   KC_F3,   KC_F4,   KC_F5,    KC_7,    KC_8,    KC_9,    JP_ASTR, JP_SLSH, JP_EQL,  KC_BSPC },
+    { JP_ZKHK, KC_ESC,  KC_F1,   KC_F2,   KC_F3,   KC_F4,   KC_F5,    KC_7,    KC_8,    KC_9,    JP_ASTR, JP_SLSH, JP_EQL,  KC_BSPC },
 
     // Row1
-    { KC_NO,   KC_NO,   KC_F6,   KC_F7,   KC_F8,   KC_F9,   KC_F10,   KC_4,    KC_5,    KC_6,    JP_PLUS, KC_NO,   KC_NO,   KC_DEL  },
+    { KC_F1,   KC_TAB,  KC_F6,   KC_F7,   KC_F8,   KC_F9,   KC_F10,   KC_4,    KC_5,    KC_6,    JP_PLUS, KC_NO,   KC_INS,  KC_DEL  },
 
     // Row2
-    { KC_NO,   KC_NO,   KC_F11,  KC_F12,  LCTL(KC_X), LCTL(KC_C), LCTL(KC_V), KC_1,    KC_2,    KC_3,    KC_0,    JP_DOT,  KC_PGUP, KC_RSFT },
+    { KC_F8,   KC_LSFT, KC_F11,  KC_F12,  LCTL(KC_X), LCTL(KC_C), LCTL(KC_V), KC_1,    KC_2,    KC_3,    KC_0,    JP_DOT,  KC_UP,   KC_RSFT },
 
     // Row3
-    { KC_NO,   KC_NO,   KC_NO,   FN3_F23, FN2_F22, FN1_F21, KC_SPC,   KC_ENT,  FN1_F21, FN2_F22, FN3_F23, KC_HOME, KC_PGDN, KC_END  }
+    { KC_LCTL, KC_LGUI, KC_LALT, FN3_F23, FN2_F22, FN1_F21, KC_SPC,   KC_ENT,  FN1_F21, FN2_F22, FN3_F23, KC_LEFT, KC_DOWN, KC_RGHT }
 },
 
 /*
@@ -304,16 +366,16 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
  */
 [_FN2] = {
     // Row0
-    { JP_ZKHK, KC_ESC,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   BOOT_HOLD, JP_UNDS, KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_BSPC },
+    { JP_ZKHK, KC_ESC,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   BOOT_HOLD, JP_MINS, JP_COLN, KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_BSPC },
 
     // Row1
-    { KC_PSCR, KC_TAB,  JP_EXLM, JP_DQUO, JP_HASH, JP_DLR,  JP_PERC,  JP_YEN,  JP_TILD, JP_CIRC, JP_LPRN, JP_RPRN, KC_NO,   KC_DEL  },
+    { KC_PSCR, KC_TAB,  JP_EXLM, JP_DQUO, JP_HASH, JP_DLR,  JP_PERC,  JP_YEN,  JP_TILD, JP_CIRC, JP_LPRN, JP_RPRN, KC_INS,  KC_DEL  },
 
     // Row2
-    { KC_NO,   KC_LSFT, KC_NO,   KC_NO,   KC_NO,   KC_NO,   JP_AT,    JP_LBRC, JP_RBRC, JP_AMPR, JP_PIPE, KC_NO,   KC_NO,   KC_RSFT },
+    { KC_NO,   KC_LSFT, KC_NO,   KC_NO,   KC_NO,   KC_NO,   JP_AT,    JP_LBRC, JP_RBRC, JP_AMPR, JP_PIPE, KC_NO,   KC_UP,   KC_RSFT },
 
     // Row3
-    { KC_NO,   KC_LCTL, KC_NO,   FN3_F23, FN2_F22, FN1_F21, KC_SPC,   KC_NO,   FN1_F21, FN2_F22, FN3_F23, KC_NO,   KC_NO,   KC_NO   }
+    { KC_LCTL, KC_LGUI, KC_LALT, FN3_F23, FN2_F22, FN1_F21, KC_SPC,   KC_ENT,  FN1_F21, FN2_F22, FN3_F23, KC_LEFT, KC_DOWN, KC_RGHT }
 },
 
 /*
@@ -325,7 +387,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     { KC_BSPC, JP_MINS, KC_P,    KC_O,    KC_I,    KC_U,    KC_Y,     KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
 
     // Row1
-    { KC_DEL,  JP_COLN, JP_SCLN, KC_L,    KC_K,    KC_J,    KC_H,     KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
+    { KC_DEL,  KC_INS,  JP_SCLN, KC_L,    KC_K,    KC_J,    KC_H,     KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
 
     // Row2
     { KC_RSFT, KC_UP,   JP_SLSH, JP_DOT,  JP_COMM, KC_M,    KC_N,     KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
@@ -342,13 +404,13 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     { KC_BSPC, JP_EQL,  JP_SLSH, JP_ASTR, KC_7,    KC_8,    KC_9,     KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
 
     // Row1
-    { KC_DEL,  KC_NO,   KC_NO,   JP_PLUS, KC_4,    KC_5,    KC_6,     KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
+    { KC_DEL,  KC_INS,  KC_NO,   JP_PLUS, KC_4,    KC_5,    KC_6,     KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
 
     // Row2
-    { KC_RSFT, KC_PGUP, JP_DOT,  KC_0,    KC_1,    KC_2,    KC_3,     KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
+    { KC_RSFT, KC_UP,   JP_DOT,  KC_0,    KC_1,    KC_2,    KC_3,     KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
 
     // Row3
-    { KC_END,  KC_PGDN, KC_HOME, FN3_F23, FN2_F22, FN1_F21, KC_ENT,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   }
+    { KC_LEFT, KC_DOWN, KC_RGHT, FN3_F23, FN2_F22, FN1_F21, KC_ENT,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   }
 },
 
 /*
@@ -356,16 +418,16 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
  */
 [_FN2_MIRROR] = {
     // Row0
-    { KC_BSPC, KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   JP_UNDS,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
+    { KC_BSPC, KC_NO,   KC_NO,   KC_NO,   KC_NO,   JP_COLN, JP_MINS,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
 
     // Row1
-    { KC_DEL,  KC_NO,   JP_RPRN, JP_LPRN, JP_CIRC, JP_TILD, JP_YEN,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
+    { KC_DEL,  KC_INS,  JP_RPRN, JP_LPRN, JP_CIRC, JP_TILD, JP_YEN,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
 
     // Row2
-    { KC_RSFT, KC_NO,   KC_NO,   JP_PIPE, JP_AMPR, JP_RBRC, JP_LBRC,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
+    { KC_RSFT, KC_UP,   KC_NO,   JP_PIPE, JP_AMPR, JP_RBRC, JP_LBRC,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
 
     // Row3
-    { KC_NO,   KC_NO,   KC_NO,   FN3_F23, FN2_F22, FN1_F21, KC_NO,    KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   }
+    { KC_LEFT, KC_DOWN, KC_RGHT, FN3_F23, FN2_F22, FN1_F21, KC_ENT,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   }
 }
 
 };
