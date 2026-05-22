@@ -6,6 +6,7 @@
 #include QMK_KEYBOARD_H
 #include "keymap_japanese.h"
 #include "raw_hid.h"
+#include <string.h>
 
 enum layers {
     _BASE = 0,
@@ -25,6 +26,9 @@ enum custom_keycodes {
 
 #define FN_KEY_DELAY_MS 1000
 #define BOOT_KEY_DELAY_MS 1000
+#define KLP_REPORT_SIZE 32
+#define KLP_MAX_PRESSED_KEYS 12
+#define KLP_PRESSED_KEYS_OFFSET 8
 
 enum fn_key_indexes {
     FN_KEY_1 = 0,
@@ -55,6 +59,8 @@ static uint16_t         boot_timer;
 static bool             boot_pressed;
 static bool             boot_triggered;
 static bool             ctrl_arrow_consumed[4];
+static uint8_t          last_layer_status_report[KLP_REPORT_SIZE];
+static bool             has_last_layer_status_report;
 
 enum ctrl_arrow_index {
     CTRL_ARROW_UP = 0,
@@ -67,6 +73,30 @@ static uint8_t get_effective_app_layer(void) {
     return (is_mirror_mode ? 3 : 0) + active_slot;
 }
 
+static void add_pressed_keys_to_report(uint8_t *report) {
+    uint8_t pressed_count = 0;
+
+    for (uint8_t row = 0; row < MATRIX_ROWS && row < 4; row++) {
+        matrix_row_t row_state = matrix_get_row(row);
+
+        for (uint8_t col = 0; col < MATRIX_COLS && col < 14; col++) {
+            if ((row_state & ((matrix_row_t)1u << col)) == 0) {
+                continue;
+            }
+
+            if (pressed_count >= KLP_MAX_PRESSED_KEYS) {
+                return;
+            }
+
+            uint8_t offset  = KLP_PRESSED_KEYS_OFFSET + pressed_count * 2;
+            report[offset]     = row;
+            report[offset + 1] = col;
+            pressed_count++;
+            report[7] = pressed_count;
+        }
+    }
+}
+
 static void send_keyboard_layer_status(void) {
 #if defined(SPLIT_KEYBOARD)
     if (!is_keyboard_master()) {
@@ -74,7 +104,7 @@ static void send_keyboard_layer_status(void) {
     }
 #endif
 
-    uint8_t report[32] = {0};
+    uint8_t report[KLP_REPORT_SIZE] = {0};
     report[0]          = 'K';
     report[1]          = 'L';
     report[2]          = 'P';
@@ -82,8 +112,15 @@ static void send_keyboard_layer_status(void) {
     report[4]          = is_mirror_mode ? 1 : 0;
     report[5]          = active_slot;
     report[6]          = get_effective_app_layer();
+    add_pressed_keys_to_report(report);
+
+    if (has_last_layer_status_report && memcmp(report, last_layer_status_report, sizeof(report)) == 0) {
+        return;
+    }
 
     raw_hid_send(report, sizeof(report));
+    memcpy(last_layer_status_report, report, sizeof(report));
+    has_last_layer_status_report = true;
 }
 
 static void set_status_from_layer(layer_state_t state) {
@@ -305,6 +342,8 @@ void matrix_scan_user(void) {
             fn_registered[i] = true;
         }
     }
+
+    send_keyboard_layer_status();
 }
 
 layer_state_t layer_state_set_user(layer_state_t state) {
