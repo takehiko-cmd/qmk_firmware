@@ -25,6 +25,8 @@ enum custom_keycodes {
 };
 
 #define FN_KEY_DELAY_MS 1000
+#define F_KEY_DELAY_MS 500
+#define F_KEY_COUNT 12
 #define BOOT_KEY_DELAY_MS 1000
 #define KLP_REPORT_SIZE 32
 #define KLP_MAX_PRESSED_KEYS 12
@@ -52,6 +54,9 @@ static const uint16_t fn_output_keycodes[FN_KEY_COUNT] = {
 static uint16_t         fn_timers[FN_KEY_COUNT];
 static uint8_t          fn_press_counts[FN_KEY_COUNT];
 static bool             fn_registered[FN_KEY_COUNT];
+static uint16_t         f_key_timers[F_KEY_COUNT];
+static uint8_t          f_key_press_counts[F_KEY_COUNT];
+static bool             f_key_registered[F_KEY_COUNT];
 static enum layer_slot  active_slot = SLOT_BASE;
 static bool             is_mirror_mode;
 static bool             syncing_layers;
@@ -200,6 +205,55 @@ static void release_registered_fn_output(uint8_t fn_index) {
     }
 }
 
+static bool get_f_key_index(uint16_t keycode, uint8_t *index) {
+    if (keycode < KC_F1 || keycode > KC_F12) {
+        return false;
+    }
+
+    *index = keycode - KC_F1;
+    return true;
+}
+
+static void release_registered_f_key(uint8_t f_key_index) {
+    if (f_key_registered[f_key_index]) {
+        unregister_code16(KC_F1 + f_key_index);
+        f_key_registered[f_key_index] = false;
+    }
+}
+
+static bool handle_delayed_f_key(uint16_t keycode, keyrecord_t *record) {
+    uint8_t f_key_index;
+
+    if (!get_f_key_index(keycode, &f_key_index)) {
+        return true;
+    }
+
+    if (record->event.pressed) {
+        if (f_key_press_counts[f_key_index] == 0) {
+            f_key_timers[f_key_index]     = timer_read();
+            f_key_registered[f_key_index] = false;
+        }
+        f_key_press_counts[f_key_index]++;
+        return false;
+    }
+
+    if (f_key_press_counts[f_key_index] > 0) {
+        f_key_press_counts[f_key_index]--;
+    }
+
+    if (f_key_press_counts[f_key_index] > 0) {
+        return false;
+    }
+
+    if (f_key_registered[f_key_index]) {
+        release_registered_f_key(f_key_index);
+    } else if (timer_elapsed(f_key_timers[f_key_index]) >= F_KEY_DELAY_MS) {
+        tap_code16(keycode);
+    }
+
+    return false;
+}
+
 static void toggle_active_slot(enum layer_slot slot) {
     active_slot = active_slot == slot ? SLOT_BASE : slot;
     sync_layers();
@@ -307,6 +361,10 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         return false;
     }
 
+    if (!handle_delayed_f_key(keycode, record)) {
+        return false;
+    }
+
     switch (keycode) {
         case FN1_F21:
             handle_fn_key(FN_KEY_1, record->event.pressed);
@@ -340,6 +398,13 @@ void matrix_scan_user(void) {
         if (fn_press_counts[i] > 0 && !fn_registered[i] && timer_elapsed(fn_timers[i]) >= FN_KEY_DELAY_MS) {
             register_code16(fn_output_keycodes[i]);
             fn_registered[i] = true;
+        }
+    }
+
+    for (uint8_t i = 0; i < F_KEY_COUNT; i++) {
+        if (f_key_press_counts[i] > 0 && !f_key_registered[i] && timer_elapsed(f_key_timers[i]) >= F_KEY_DELAY_MS) {
+            register_code16(KC_F1 + i);
+            f_key_registered[i] = true;
         }
     }
 
