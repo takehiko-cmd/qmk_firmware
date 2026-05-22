@@ -262,7 +262,12 @@ static void toggle_active_slot(enum layer_slot slot) {
 static void handle_short_fn_tap(uint8_t fn_index) {
     switch (fn_index) {
         case FN_KEY_1:
-            toggle_active_slot(SLOT_FN1);
+            if (active_slot == SLOT_FN2) {
+                active_slot = SLOT_BASE;
+                sync_layers();
+            } else {
+                toggle_active_slot(SLOT_FN1);
+            }
             break;
         case FN_KEY_2:
             toggle_active_slot(SLOT_FN2);
