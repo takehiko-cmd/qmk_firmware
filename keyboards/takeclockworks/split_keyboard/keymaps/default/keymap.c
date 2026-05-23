@@ -20,7 +20,7 @@ enum layers {
 enum custom_keycodes {
     FN1_F21 = SAFE_RANGE,
     FN2_F22,
-    FN3_F23,
+    FN3_KEY,
     BOOT_HOLD,
 };
 
@@ -29,13 +29,21 @@ enum custom_keycodes {
 #define F_KEY_COUNT 12
 #define BOOT_KEY_DELAY_MS 1000
 #define KLP_REPORT_SIZE 32
-#define KLP_MAX_PRESSED_KEYS 12
-#define KLP_PRESSED_KEYS_OFFSET 8
+#define KLP_PROTOCOL_VERSION 2
+#define KLP_MAX_PRESSED_KEYS 11
+#define KLP_PRESSED_COUNT_OFFSET 8
+#define KLP_PRESSED_KEYS_OFFSET 9
+#define RIGHT_SIDE_START_COL 7
+
+enum klp_overlay_request {
+    KLP_OVERLAY_NONE = 0,
+    KLP_OVERLAY_MIRROR_KEYBOARD,
+    KLP_OVERLAY_LEFT_SIDE_ONLY,
+};
 
 enum fn_key_indexes {
     FN_KEY_1 = 0,
     FN_KEY_2,
-    FN_KEY_3,
     FN_KEY_COUNT,
 };
 
@@ -48,7 +56,6 @@ enum layer_slot {
 static const uint16_t fn_output_keycodes[FN_KEY_COUNT] = {
     KC_F21,
     KC_F22,
-    KC_F23,
 };
 
 static uint16_t         fn_timers[FN_KEY_COUNT];
@@ -58,8 +65,14 @@ static uint16_t         f_key_timers[F_KEY_COUNT];
 static uint8_t          f_key_press_counts[F_KEY_COUNT];
 static bool             f_key_registered[F_KEY_COUNT];
 static enum layer_slot  active_slot = SLOT_BASE;
+static bool             mirror_mode_enabled;
 static bool             is_mirror_mode;
 static bool             syncing_layers;
+static uint16_t         fn3_timer;
+static uint8_t          fn3_press_count;
+static bool             fn3_long_action_handled;
+static bool             fn3_pressed_in_mirror_mode;
+static bool             fn3_pressed_on_left_side;
 static uint16_t         boot_timer;
 static bool             boot_pressed;
 static bool             boot_triggered;
@@ -97,12 +110,12 @@ static void add_pressed_keys_to_report(uint8_t *report) {
             report[offset]     = row;
             report[offset + 1] = col;
             pressed_count++;
-            report[7] = pressed_count;
+            report[KLP_PRESSED_COUNT_OFFSET] = pressed_count;
         }
     }
 }
 
-static void send_keyboard_layer_status(void) {
+static void send_keyboard_layer_report(uint8_t overlay_request) {
 #if defined(SPLIT_KEYBOARD)
     if (!is_keyboard_master()) {
         return;
@@ -113,45 +126,63 @@ static void send_keyboard_layer_status(void) {
     report[0]          = 'K';
     report[1]          = 'L';
     report[2]          = 'P';
-    report[3]          = 1;
+    report[3]          = KLP_PROTOCOL_VERSION;
     report[4]          = is_mirror_mode ? 1 : 0;
     report[5]          = active_slot;
     report[6]          = get_effective_app_layer();
+    report[7]          = overlay_request;
     add_pressed_keys_to_report(report);
 
-    if (has_last_layer_status_report && memcmp(report, last_layer_status_report, sizeof(report)) == 0) {
+    if (overlay_request == KLP_OVERLAY_NONE && has_last_layer_status_report && memcmp(report, last_layer_status_report, sizeof(report)) == 0) {
         return;
     }
 
     raw_hid_send(report, sizeof(report));
-    memcpy(last_layer_status_report, report, sizeof(report));
-    has_last_layer_status_report = true;
+
+    if (overlay_request == KLP_OVERLAY_NONE) {
+        memcpy(last_layer_status_report, report, sizeof(report));
+        has_last_layer_status_report = true;
+    }
+}
+
+static void send_keyboard_layer_status(void) {
+    send_keyboard_layer_report(KLP_OVERLAY_NONE);
+}
+
+static void send_keyboard_layer_overlay(uint8_t overlay_request) {
+    send_keyboard_layer_report(overlay_request);
 }
 
 static void set_status_from_layer(layer_state_t state) {
     switch (get_highest_layer(state)) {
         case _FN2_MIRROR:
+            mirror_mode_enabled = true;
             is_mirror_mode = true;
             active_slot    = SLOT_FN2;
             break;
         case _FN1_MIRROR:
+            mirror_mode_enabled = true;
             is_mirror_mode = true;
             active_slot    = SLOT_FN1;
             break;
         case _BASE_MIRROR:
+            mirror_mode_enabled = true;
             is_mirror_mode = true;
             active_slot    = SLOT_BASE;
             break;
         case _FN2:
+            mirror_mode_enabled = false;
             is_mirror_mode = false;
             active_slot    = SLOT_FN2;
             break;
         case _FN1:
+            mirror_mode_enabled = false;
             is_mirror_mode = false;
             active_slot    = SLOT_FN1;
             break;
         case _BASE:
         default:
+            mirror_mode_enabled = false;
             is_mirror_mode = false;
             active_slot    = SLOT_BASE;
             break;
@@ -259,6 +290,16 @@ static void toggle_active_slot(enum layer_slot slot) {
     sync_layers();
 }
 
+static void handle_fn3_short_tap(void) {
+    if (!mirror_mode_enabled) {
+        return;
+    }
+
+    is_mirror_mode = !is_mirror_mode;
+    sync_layers();
+    send_keyboard_layer_overlay(is_mirror_mode ? KLP_OVERLAY_MIRROR_KEYBOARD : KLP_OVERLAY_LEFT_SIDE_ONLY);
+}
+
 static void handle_short_fn_tap(uint8_t fn_index) {
     switch (fn_index) {
         case FN_KEY_1:
@@ -272,10 +313,50 @@ static void handle_short_fn_tap(uint8_t fn_index) {
         case FN_KEY_2:
             toggle_active_slot(SLOT_FN2);
             break;
-        case FN_KEY_3:
-            is_mirror_mode = !is_mirror_mode;
-            sync_layers();
-            break;
+    }
+}
+
+static void handle_fn3_mirror_toggle(void) {
+    if (mirror_mode_enabled) {
+        mirror_mode_enabled = false;
+        is_mirror_mode      = false;
+        active_slot         = SLOT_BASE;
+    } else {
+        mirror_mode_enabled = true;
+        is_mirror_mode      = true;
+    }
+
+    sync_layers();
+}
+
+static void handle_fn3_key(keyrecord_t *record) {
+    if (record->event.pressed) {
+        if (fn3_press_count == 0) {
+            fn3_timer                  = timer_read();
+            fn3_long_action_handled    = false;
+            fn3_pressed_in_mirror_mode = mirror_mode_enabled;
+            fn3_pressed_on_left_side   = record->event.key.col < RIGHT_SIDE_START_COL;
+        }
+        fn3_press_count++;
+        return;
+    }
+
+    if (fn3_press_count > 0) {
+        fn3_press_count--;
+    }
+
+    if (fn3_press_count > 0) {
+        return;
+    }
+
+    if (fn3_long_action_handled) {
+        return;
+    }
+
+    if (fn3_pressed_on_left_side && timer_elapsed(fn3_timer) >= FN_KEY_DELAY_MS) {
+        handle_fn3_mirror_toggle();
+    } else {
+        handle_fn3_short_tap();
     }
 }
 
@@ -361,7 +442,15 @@ static bool handle_ctrl_arrow(uint16_t keycode, keyrecord_t *record) {
     return false;
 }
 
+static bool should_block_right_side_key(keyrecord_t *record) {
+    return mirror_mode_enabled && !is_mirror_mode && record->event.key.col >= RIGHT_SIDE_START_COL;
+}
+
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    if (should_block_right_side_key(record)) {
+        return false;
+    }
+
     if (!handle_ctrl_arrow(keycode, record)) {
         return false;
     }
@@ -377,8 +466,8 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         case FN2_F22:
             handle_fn_key(FN_KEY_2, record->event.pressed);
             return false;
-        case FN3_F23:
-            handle_fn_key(FN_KEY_3, record->event.pressed);
+        case FN3_KEY:
+            handle_fn3_key(record);
             return false;
         case BOOT_HOLD:
             if (record->event.pressed) {
@@ -411,6 +500,13 @@ void matrix_scan_user(void) {
             register_code16(KC_F1 + i);
             f_key_registered[i] = true;
         }
+    }
+
+    if (fn3_press_count > 0 && fn3_pressed_on_left_side && !fn3_long_action_handled && timer_elapsed(fn3_timer) >= FN_KEY_DELAY_MS) {
+        if (mirror_mode_enabled == fn3_pressed_in_mirror_mode) {
+            handle_fn3_mirror_toggle();
+        }
+        fn3_long_action_handled = true;
     }
 
     send_keyboard_layer_status();
@@ -448,7 +544,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     { KC_F8,   KC_LSFT, KC_Z,    KC_X,    KC_C,    KC_V,    KC_B,     KC_N,    KC_M,    JP_COMM, JP_DOT,  JP_SLSH, KC_UP,   KC_RSFT },
 
     // Row3
-    { KC_LCTL, KC_LGUI, KC_LALT, FN3_F23, FN2_F22, FN1_F21, KC_SPC,   KC_ENT,  FN1_F21, FN2_F22, FN3_F23, KC_LEFT, KC_DOWN, KC_RGHT }
+    { KC_LCTL, KC_LGUI, KC_LALT, FN3_KEY, FN2_F22, FN1_F21, KC_SPC,   KC_ENT,  FN1_F21, FN2_F22, FN3_KEY, KC_LEFT, KC_DOWN, KC_RGHT }
 },
 
 /*
@@ -466,7 +562,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     { KC_F8,   KC_LSFT, KC_F11,  KC_F12,  LCTL(KC_X), LCTL(KC_C), LCTL(KC_V), KC_0,    KC_1,    KC_2,    KC_3,    JP_MINS, KC_UP,   KC_RSFT },
 
     // Row3
-    { KC_LCTL, KC_LGUI, KC_LALT, FN3_F23, FN2_F22, FN1_F21, KC_SPC,   KC_ENT,  FN1_F21, FN2_F22, FN3_F23, KC_LEFT, KC_DOWN, KC_RGHT }
+    { KC_LCTL, KC_LGUI, KC_LALT, FN3_KEY, FN2_F22, FN1_F21, KC_SPC,   KC_ENT,  FN1_F21, FN2_F22, FN3_KEY, KC_LEFT, KC_DOWN, KC_RGHT }
 },
 
 /*
@@ -484,7 +580,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     { KC_NO,   KC_LSFT, KC_NO,   KC_NO,   KC_NO,   JP_HASH, JP_AT,    JP_LBRC, JP_RBRC, JP_TILD, JP_PIPE, KC_NO,   KC_UP,   KC_RSFT },
 
     // Row3
-    { KC_LCTL, KC_LGUI, KC_LALT, FN3_F23, FN2_F22, FN1_F21, KC_SPC,   KC_ENT,  FN1_F21, FN2_F22, FN3_F23, KC_LEFT, KC_DOWN, KC_RGHT }
+    { KC_LCTL, KC_LGUI, KC_LALT, FN3_KEY, FN2_F22, FN1_F21, KC_SPC,   KC_ENT,  FN1_F21, FN2_F22, FN3_KEY, KC_LEFT, KC_DOWN, KC_RGHT }
 },
 
 /*
@@ -502,7 +598,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     { KC_RSFT, KC_UP,   JP_SLSH, JP_DOT,  JP_COMM, KC_M,    KC_N,     KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
 
     // Row3
-    { KC_LEFT, KC_DOWN, KC_RGHT, FN3_F23, FN2_F22, FN1_F21, KC_ENT,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   }
+    { KC_LEFT, KC_DOWN, KC_RGHT, FN3_KEY, FN2_F22, FN1_F21, KC_ENT,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   }
 },
 
 /*
@@ -519,7 +615,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     { KC_RSFT, KC_UP,   JP_MINS, KC_1,    KC_2,    KC_3,    KC_0,     KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
 
     // Row3
-    { KC_LEFT, KC_DOWN, KC_RGHT, FN3_F23, FN2_F22, FN1_F21, KC_ENT,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   }
+    { KC_LEFT, KC_DOWN, KC_RGHT, FN3_KEY, FN2_F22, FN1_F21, KC_ENT,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   }
 },
 
 /*
@@ -536,7 +632,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     { KC_RSFT, KC_UP,   KC_NO,   JP_PIPE, JP_TILD, JP_RBRC, JP_LBRC,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
 
     // Row3
-    { KC_LEFT, KC_DOWN, KC_RGHT, FN3_F23, FN2_F22, FN1_F21, KC_ENT,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   }
+    { KC_LEFT, KC_DOWN, KC_RGHT, FN3_KEY, FN2_F22, FN1_F21, KC_ENT,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   }
 }
 
 };
