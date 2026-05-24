@@ -52,7 +52,6 @@ enum custom_keycodes {
     CUSTOM_KEY_25,
 };
 
-#define FN_KEY_DELAY_MS 1000
 #define F_KEY_DELAY_MS 500
 #define F_KEY_COUNT 12
 #define BOOT_KEY_DELAY_MS 1000
@@ -107,11 +106,8 @@ static bool             mirror_mode_enabled;
 static bool             is_mirror_mode;
 static bool             custom_mode_enabled;
 static bool             syncing_layers;
-static uint16_t         fn3_timer;
 static uint8_t          fn3_press_count;
-static bool             fn3_long_action_handled;
-static bool             fn3_pressed_in_mirror_mode;
-static bool             fn3_pressed_on_left_side;
+static bool             mirror_overlay_held;
 static uint16_t         boot_timer;
 static bool             boot_pressed;
 static bool             boot_triggered;
@@ -128,6 +124,10 @@ enum ctrl_arrow_index {
 
 static uint8_t get_effective_app_layer(void) {
     return (is_mirror_mode ? 3 : 0) + active_slot;
+}
+
+static uint8_t get_keyboard_layer_overlay_request(void) {
+    return mirror_overlay_held ? KLP_OVERLAY_MIRROR_KEYBOARD : KLP_OVERLAY_NONE;
 }
 
 static void add_pressed_keys_to_report_at(uint8_t *report, uint8_t count_offset, uint8_t keys_offset, uint8_t max_pressed_keys) {
@@ -158,13 +158,14 @@ static void add_pressed_keys_to_report(uint8_t *report) {
     add_pressed_keys_to_report_at(report, KLP_PRESSED_COUNT_OFFSET, KLP_PRESSED_KEYS_OFFSET, KLP_MAX_PRESSED_KEYS);
 }
 
-static void send_keyboard_layer_report(uint8_t overlay_request) {
+static void send_keyboard_layer_report(void) {
 #if defined(SPLIT_KEYBOARD)
     if (!is_keyboard_master()) {
         return;
     }
 #endif
 
+    uint8_t overlay_request = get_keyboard_layer_overlay_request();
     uint8_t report[KLP_REPORT_SIZE] = {0};
     report[0]          = 'K';
     report[1]          = 'L';
@@ -176,27 +177,21 @@ static void send_keyboard_layer_report(uint8_t overlay_request) {
     report[7]          = overlay_request;
     add_pressed_keys_to_report(report);
 
-    if (overlay_request == KLP_OVERLAY_NONE && has_last_layer_status_report && memcmp(report, last_layer_status_report, sizeof(report)) == 0) {
+    if (has_last_layer_status_report && memcmp(report, last_layer_status_report, sizeof(report)) == 0) {
         return;
     }
 
     raw_hid_send(report, sizeof(report));
 
-    if (overlay_request == KLP_OVERLAY_NONE) {
-        memcpy(last_layer_status_report, report, sizeof(report));
-        has_last_layer_status_report = true;
-    }
+    memcpy(last_layer_status_report, report, sizeof(report));
+    has_last_layer_status_report = true;
 }
 
 static void send_keyboard_layer_status(void) {
-    send_keyboard_layer_report(KLP_OVERLAY_NONE);
+    send_keyboard_layer_report();
 }
 
-static void send_keyboard_layer_overlay(uint8_t overlay_request) {
-    send_keyboard_layer_report(overlay_request);
-}
-
-static void send_custom_mode_report(uint8_t message_type, uint8_t overlay_request, uint8_t custom_key_id, uint8_t event_type) {
+static void send_custom_mode_report(uint8_t message_type, uint8_t custom_key_id, uint8_t event_type) {
 #if defined(SPLIT_KEYBOARD)
     if (!is_keyboard_master()) {
         return;
@@ -212,7 +207,7 @@ static void send_custom_mode_report(uint8_t message_type, uint8_t overlay_reques
     report[5]  = is_mirror_mode ? 1 : 0;
     report[6]  = active_slot;
     report[7]  = get_effective_app_layer();
-    report[8]  = overlay_request;
+    report[8]  = get_keyboard_layer_overlay_request();
     report[9]  = custom_mode_enabled ? 1 : 0;
     report[10] = custom_key_id;
     report[11] = event_type;
@@ -222,15 +217,15 @@ static void send_custom_mode_report(uint8_t message_type, uint8_t overlay_reques
 }
 
 static void send_custom_mode_status(void) {
-    send_custom_mode_report(KLP_V3_MESSAGE_STATUS, KLP_OVERLAY_NONE, 0, KLP_V3_EVENT_RELEASED);
+    send_custom_mode_report(KLP_V3_MESSAGE_STATUS, 0, KLP_V3_EVENT_RELEASED);
 }
 
 static void send_custom_mode_state(void) {
-    send_custom_mode_report(KLP_V3_MESSAGE_CUSTOM_MODE_STATE, KLP_OVERLAY_NONE, 0, KLP_V3_EVENT_RELEASED);
+    send_custom_mode_report(KLP_V3_MESSAGE_CUSTOM_MODE_STATE, 0, KLP_V3_EVENT_RELEASED);
 }
 
 static void send_custom_key_event(uint8_t custom_key_id, bool pressed) {
-    send_custom_mode_report(KLP_V3_MESSAGE_CUSTOM_KEY_EVENT, KLP_OVERLAY_NONE, custom_key_id, pressed ? KLP_V3_EVENT_PRESSED : KLP_V3_EVENT_RELEASED);
+    send_custom_mode_report(KLP_V3_MESSAGE_CUSTOM_KEY_EVENT, custom_key_id, pressed ? KLP_V3_EVENT_PRESSED : KLP_V3_EVENT_RELEASED);
 }
 
 static void set_status_from_layer(layer_state_t state) {
@@ -378,16 +373,6 @@ static bool handle_delayed_f_key(uint16_t keycode, keyrecord_t *record) {
     return false;
 }
 
-static void handle_fn3_short_tap(void) {
-    if (!mirror_mode_enabled) {
-        return;
-    }
-
-    is_mirror_mode = !is_mirror_mode;
-    sync_layers();
-    send_keyboard_layer_overlay(is_mirror_mode ? KLP_OVERLAY_MIRROR_KEYBOARD : KLP_OVERLAY_LEFT_SIDE_ONLY);
-}
-
 static void update_momentary_fn_slot(void) {
     enum layer_slot next_slot = SLOT_BASE;
 
@@ -429,28 +414,18 @@ static bool handle_momentary_fn_key(uint16_t keycode, keyrecord_t *record) {
     return false;
 }
 
-static void handle_fn3_mirror_toggle(void) {
-    if (mirror_mode_enabled) {
-        mirror_mode_enabled = false;
-        is_mirror_mode      = false;
-        active_slot         = SLOT_BASE;
-    } else {
-        mirror_mode_enabled = true;
-        is_mirror_mode      = true;
-    }
-
-    sync_layers();
-}
-
 static void handle_fn3_key(keyrecord_t *record) {
     if (record->event.pressed) {
-        if (fn3_press_count == 0) {
-            fn3_timer                  = timer_read();
-            fn3_long_action_handled    = false;
-            fn3_pressed_in_mirror_mode = mirror_mode_enabled;
-            fn3_pressed_on_left_side   = record->event.key.col < RIGHT_SIDE_START_COL;
+        if (fn3_press_count < 255) {
+            fn3_press_count++;
         }
-        fn3_press_count++;
+
+        if (fn3_press_count == 1) {
+            mirror_overlay_held = true;
+            mirror_mode_enabled = true;
+            is_mirror_mode      = true;
+            sync_layers();
+        }
         return;
     }
 
@@ -462,15 +437,10 @@ static void handle_fn3_key(keyrecord_t *record) {
         return;
     }
 
-    if (fn3_long_action_handled) {
-        return;
-    }
-
-    if (fn3_pressed_on_left_side && timer_elapsed(fn3_timer) >= FN_KEY_DELAY_MS) {
-        handle_fn3_mirror_toggle();
-    } else {
-        handle_fn3_short_tap();
-    }
+    mirror_overlay_held = false;
+    mirror_mode_enabled = false;
+    is_mirror_mode      = false;
+    sync_layers();
 }
 
 static bool handle_ctrl_arrow(uint16_t keycode, keyrecord_t *record) {
@@ -608,13 +578,6 @@ void matrix_scan_user(void) {
             register_code16(KC_F1 + i);
             f_key_registered[i] = true;
         }
-    }
-
-    if (fn3_press_count > 0 && fn3_pressed_on_left_side && !fn3_long_action_handled && timer_elapsed(fn3_timer) >= FN_KEY_DELAY_MS) {
-        if (mirror_mode_enabled == fn3_pressed_in_mirror_mode) {
-            handle_fn3_mirror_toggle();
-        }
-        fn3_long_action_handled = true;
     }
 
     send_keyboard_layer_status();

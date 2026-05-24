@@ -85,7 +85,7 @@
 | --- | --- |
 | `FN1_F21` | 押下中だけFn1 / Fn1 Mirrorを有効化 |
 | `FN2_F22` | 押下中だけFn2 / Fn2 Mirrorを有効化 |
-| `FN3_KEY` | ミラーモード関連操作 |
+| `FN3_KEY` | 押下中だけミラーモードを有効化 |
 | `FN4_CUSTOM` | CustomMode切替 |
 | `BOOT_HOLD` | 長押しでブートローダーへ入る |
 
@@ -93,7 +93,6 @@
 
 | 定数 | 値 | 意味 |
 | --- | --- | --- |
-| `FN_KEY_DELAY_MS` | 1000 ms | FN3長押しを判定する時間 |
 | `F_KEY_DELAY_MS` | 500 ms | F1-F12を長押し扱いにする時間 |
 | `BOOT_KEY_DELAY_MS` | 1000 ms | Bootloader起動に必要な長押し時間 |
 | `F_KEY_COUNT` | 12 | F1-F12の数 |
@@ -144,45 +143,35 @@ Fn1とFn2が同時に押されている場合はFn2を優先する。
 
 `FN3_KEY` はミラーモード用の制御キー。
 
-押下開始時に以下を記録する。
+FN3はトグルではなく、押している間だけミラー側へ切り替えるモーメンタリキーとして動作する。
 
-- 押下開始時点でミラー機能が有効だったか
-- 左側キーとして押されたかどうか
-- 押下開始時刻
+押下時:
 
-### 8.1 左側のFN3長押し
+- `fn3_press_count` を増やす。
+- 最初のFN3押下なら `mirror_mode_enabled = true`、`is_mirror_mode = true` にする。
+- `mirror_overlay_held = true` にする。
+- 現在の `active_slot` は維持する。
+- 対応するMirrorレイヤーへ同期する。
+- Raw HID status reportで `overlay_request = 1` を送る。
 
-左側、つまり列 `0` - `6` のFN3を1秒以上押すと、ミラーモード機能全体をトグルする。
+解放時:
 
-ミラーモード機能が無効のとき:
-
-- `mirror_mode_enabled = true`
-- `is_mirror_mode = true`
-- 現在の `active_slot` は維持
-- 対応するMirrorレイヤーへ同期
-
-ミラーモード機能が有効のとき:
-
-- `mirror_mode_enabled = false`
-- `is_mirror_mode = false`
-- `active_slot = SLOT_BASE`
-- Baseへ戻る
-
-### 8.2 FN3短押し
-
-ミラーモード機能が有効なときだけ動作する。
-
-- `is_mirror_mode` をトグルする。
-- trueならMirrorレイヤーへ同期する。
-- falseなら通常側レイヤーへ同期する。
-- Raw HIDでオーバーレイ要求を送る。
+- `fn3_press_count` を減らす。
+- まだ他のFN3が押されている場合は状態を維持する。
+- 最後のFN3解放なら `mirror_mode_enabled = false`、`is_mirror_mode = false` にする。
+- `mirror_overlay_held = false` にする。
+- 現在の `active_slot` は維持したまま通常側レイヤーへ同期する。
+- Raw HID status reportで `overlay_request = 0` を送る。
 
 送信されるオーバーレイ要求:
 
 | 状態 | overlay_request |
 | --- | --- |
-| Mirror側へ切替 | `KLP_OVERLAY_MIRROR_KEYBOARD` |
-| 通常左手側へ切替 | `KLP_OVERLAY_LEFT_SIDE_ONLY` |
+| FN3押下中 | `KLP_OVERLAY_MIRROR_KEYBOARD` |
+| FN3非押下中 | `KLP_OVERLAY_NONE` |
+
+`overlay_request` は一回限りの表示要求ではなく、FN3/Mirrorキーが押されている現在状態として扱う。
+そのため、FN3解放時は必ず `overlay_request = 0` のstatus reportを送る。
 
 ## 9. ミラーモード仕様
 
@@ -192,11 +181,14 @@ Fn1とFn2が同時に押されている場合はFn2を優先する。
 
 | 変数 | 意味 |
 | --- | --- |
-| `mirror_mode_enabled` | ミラー機能全体が有効か |
+| `mirror_mode_enabled` | ミラーレイヤーを有効にしているか |
 | `is_mirror_mode` | 現在Mirror側のキー配置を使用中か |
+| `mirror_overlay_held` | KeyboardLayerPeekへMirror overlayを表示させるためのFN3押下状態 |
 
 重要な制御:
 
+- 現在の実装ではFN3押下中だけ `mirror_mode_enabled == true` かつ `is_mirror_mode == true` になる。
+- FN3解放後は `mirror_mode_enabled == false` へ戻るため、物理右側キーは通常通り入力できる。
 - `mirror_mode_enabled == true` かつ `is_mirror_mode == false` のとき、右側キーはすべてブロックされる。
 - これは `should_block_right_side_key()` で判定される。
 - 条件は `record->event.key.col >= 7`。
@@ -204,8 +196,7 @@ Fn1とFn2が同時に押されている場合はFn2を優先する。
 
 目的:
 
-- 片手入力中に「左側通常面」と「左側に写した右側面」をFN3短押しで切り替える。
-- ミラー機能使用中は物理右側の誤入力を防ぐ。
+- FN3を押している間だけ「左側に写した右側面」を使い、離すと通常面へ戻す。
 
 ## 10. F1-F12の遅延出力仕様
 
@@ -271,9 +262,9 @@ Raw HIDにより、ホスト側アプリへ現在のキーボード状態を32�
 - `layer_state_set_user()`
 - `sync_layers()` 後
 - `matrix_scan_user()` 内で状態変化があれば送信
-- FN3短押しによるオーバーレイ要求時
+- FN3押下 / 解放により `mirror_overlay_held` が変化した時
 
-ただし、通常状態通知で前回と完全一致する場合は送信しない。
+ただし、前回のstatus reportと完全一致する場合は送信しない。
 
 ### 13.1 レポート形式
 
@@ -288,7 +279,7 @@ Raw HIDにより、ホスト側アプリへ現在のキーボード状態を32�
 | 4 | `is_mirror_mode`。通常0、Mirror中1 |
 | 5 | `active_slot`。Base=0、Fn1=1、Fn2=2 |
 | 6 | アプリ用有効レイヤー番号 |
-| 7 | overlay request |
+| 7 | overlay request。`mirror_overlay_held` がtrueなら1、falseなら0 |
 | 8 | 押下キー数 |
 | 9以降 | 押下キーの row / col ペア |
 
@@ -322,9 +313,12 @@ Raw HIDにより、ホスト側アプリへ現在のキーボード状態を32�
 
 | 値 | 定数 | 意味 |
 | --- | --- | --- |
-| 0 | `KLP_OVERLAY_NONE` | 通常の状態通知 |
-| 1 | `KLP_OVERLAY_MIRROR_KEYBOARD` | Mirrorキーボード表示要求 |
+| 0 | `KLP_OVERLAY_NONE` | overlayなし。FN3/Mirrorキー非押下 |
+| 1 | `KLP_OVERLAY_MIRROR_KEYBOARD` | Mirrorキーボード表示。FN3/Mirrorキー押下中 |
 | 2 | `KLP_OVERLAY_LEFT_SIDE_ONLY` | 左側のみ表示要求 |
+
+protocol v2ではByte 7、protocol v3ではByte 8に同じ意味で格納する。
+FN3解放後は `KLP_OVERLAY_LEFT_SIDE_ONLY` ではなく `KLP_OVERLAY_NONE` を送る。
 
 ### 13.4 Split Keyboard時の注意
 
@@ -447,15 +441,14 @@ Raw HIDにより、ホスト側アプリへ現在のキーボード状態を32�
 | 関数 | 役割 |
 | --- | --- |
 | `process_record_user()` | 全キー入力の前処理。右側ブロック、Ctrl矢印変換、Fキー遅延、独自キー処理を行う |
-| `matrix_scan_user()` | F1-F12長押し判定、FN3長押し判定、Bootloader判定、Raw HID状態通知を行う |
+| `matrix_scan_user()` | F1-F12長押し判定、Bootloader判定、Raw HID状態通知を行う |
 | `layer_state_set_user()` | QMKレイヤー変化から内部状態を同期する |
 | `keyboard_post_init_user()` | 起動後にRaw HID状態通知を行う |
 | `sync_layers()` | 内部状態に合わせてQMKレイヤーをon/offする |
 | `set_status_from_layer()` | QMKの最高レイヤーから `active_slot` とミラー状態を復元する |
-| `send_keyboard_layer_status()` | 通常Raw HID状態通知を送る |
-| `send_keyboard_layer_overlay()` | オーバーレイ要求付きRaw HID通知を送る |
+| `send_keyboard_layer_status()` | Raw HID状態通知を送る。`overlay_request` は `mirror_overlay_held` から作る |
 | `handle_momentary_fn_key()` | FN1/FN2の押下中のみ有効なレイヤー切替処理 |
-| `handle_fn3_key()` | FN3の短押し・長押し処理 |
+| `handle_fn3_key()` | FN3の押下中だけミラー側へ切り替える処理 |
 | `handle_delayed_f_key()` | F1-F12の遅延出力処理 |
 | `handle_ctrl_arrow()` | Ctrl+矢印をPage/Home/End系へ変換 |
 
@@ -485,8 +478,8 @@ RAW_ENABLE = yes
 
 keymap.cにはBase/Fn1/Fn2と、それぞれのMirror版の合計6レイヤーがあります。
 FN1_F21とFN2_F22は押している間だけFn1/Fn2レイヤーを有効にするモーメンタリキーです。Fn2はFn1より優先され、F21/F22キーイベントは送信しません。
-FN3_KEYはミラーモード制御で、左側FN3の1秒長押しでミラー機能全体をON/OFFし、ミラー機能ON中の短押しで左側通常面と左側ミラー面を切り替えます。
-ミラー機能ONかつ通常左側面表示中は、物理右側キーをブロックします。
+FN3_KEYはミラーモード制御で、押している間だけ左側ミラー面へ切り替え、離すと通常面へ戻ります。
+FN3を離した後は物理右側キーも通常通り入力できます。
 
 F1-F12は500ms以上押したときだけ出力する遅延キーになっています。
 Ctrl+矢印はCtrlを一時的に外して、Up=PageUp、Down=PageDown、Left=Home、Right=Endへ変換します。
