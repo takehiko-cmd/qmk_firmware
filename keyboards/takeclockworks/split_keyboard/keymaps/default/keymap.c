@@ -727,17 +727,17 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 
 /*
  * [1] Fn1
- * Function keys / numbers
+ * Symbols / numbers
  */
 [_FN1] = {
     // Row0
-    { JP_ZKHK, KC_ESC,  KC_F1,   KC_F2,   KC_F3,   KC_F4,   KC_F5,    JP_EQL,  KC_7,    KC_8,    KC_9,    JP_ASTR, JP_SLSH, KC_BSPC },
+    { JP_ZKHK, KC_ESC,  JP_EXLM, JP_DQUO, JP_HASH, JP_AT,   JP_MINS,  JP_EQL,  KC_7,    KC_8,    KC_9,    JP_ASTR, JP_SLSH, KC_BSPC },
 
     // Row1
-    { KC_F2,   KC_TAB,  KC_F6,   KC_F7,   KC_F8,   KC_F9,   KC_F10,   JP_DOT,  KC_4,    KC_5,    KC_6,    JP_PLUS, KC_INS,  KC_DEL  },
+    { KC_F2,   KC_TAB,  JP_PERC, JP_AMPR, JP_QUOT, LCTL(KC_Z), LCTL(KC_Y), JP_DOT,  KC_4,    KC_5,    KC_6,    JP_PLUS, KC_INS,  KC_DEL  },
 
     // Row2
-    { KC_F8,   KC_LSFT, KC_F11,  KC_F12,  LCTL(KC_X), LCTL(KC_C), LCTL(KC_V), KC_0,    KC_1,    KC_2,    KC_3,    JP_MINS, KC_UP,   KC_RSFT },
+    { KC_F8,   KC_LSFT, KC_NO,   KC_NO,   LCTL(KC_X), LCTL(KC_C), LCTL(KC_V), KC_0,    KC_1,    KC_2,    KC_3,    JP_MINS, KC_UP,   KC_RSFT },
 
     // Row3
     { KC_LCTL, KC_LGUI, KC_LALT, FN3_KEY, FN2_F22, FN1_F21, KC_SPC,   KC_ENT,  FN1_F21, FN2_F22, FN4_CUSTOM, KC_LEFT, KC_DOWN, KC_RGHT }
@@ -745,17 +745,17 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 
 /*
  * [2] Fn2
- * Symbols
+ * Function keys / symbols
  */
 [_FN2] = {
     // Row0
-    { JP_ZKHK, KC_ESC,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   BOOT_HOLD, JP_UNDS, JP_COLN, JP_CIRC, KC_NO,   KC_NO,   KC_NO,   KC_BSPC },
+    { JP_ZKHK, KC_ESC,  KC_PSCR, KC_NO,   KC_F1,   KC_F2,   BOOT_HOLD, JP_LPRN, JP_RPRN, JP_YEN,  JP_DLR,  KC_NO,   KC_NO,   KC_BSPC },
 
     // Row1
-    { KC_PSCR, KC_TAB,  KC_NO,   JP_DLR,  JP_EXLM, JP_DQUO, JP_PERC,  JP_LPRN, JP_RPRN, JP_AMPR, JP_YEN,  KC_NO,   KC_INS,  KC_DEL  },
+    { KC_F2,   KC_TAB,  KC_F3,   KC_F4,   KC_F5,   KC_F6,   KC_F7,    JP_LBRC, JP_RBRC, KC_NO,   KC_NO,   KC_NO,   KC_INS,  KC_DEL  },
 
     // Row2
-    { KC_NO,   KC_LSFT, KC_NO,   KC_NO,   KC_NO,   JP_HASH, JP_AT,    JP_LBRC, JP_RBRC, JP_TILD, JP_PIPE, KC_NO,   KC_UP,   KC_RSFT },
+    { KC_F8,   KC_LSFT, KC_F8,   KC_F9,   KC_F10,  KC_F11,  KC_F12,   JP_SCLN, JP_COLN, JP_CIRC, JP_PIPE, KC_NO,   KC_UP,   KC_RSFT },
 
     // Row3
     { KC_LCTL, KC_LGUI, KC_LALT, FN3_KEY, FN2_F22, FN1_F21, KC_SPC,   KC_ENT,  FN1_F21, FN2_F22, FN4_CUSTOM, KC_LEFT, KC_DOWN, KC_RGHT }
@@ -801,13 +801,13 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
  */
 [_FN2_MIRROR] = {
     // Row0
-    { KC_BSPC, KC_NO,   KC_NO,   KC_NO,   JP_CIRC, JP_COLN, JP_UNDS,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
+    { KC_BSPC, KC_NO,   KC_NO,   JP_DLR,  JP_YEN,  JP_RPRN, JP_LPRN,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
 
     // Row1
-    { KC_DEL,  KC_INS,  KC_NO,   JP_YEN,  JP_AMPR, JP_RPRN, JP_LPRN,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
+    { KC_DEL,  KC_INS,  KC_NO,   KC_NO,   KC_NO,   JP_RBRC, JP_LBRC,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
 
     // Row2
-    { KC_RSFT, KC_UP,   KC_NO,   JP_PIPE, JP_TILD, JP_RBRC, JP_LBRC,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
+    { KC_RSFT, KC_UP,   KC_NO,   JP_PIPE, JP_CIRC, JP_COLN, JP_SCLN,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
 
     // Row3
     { KC_LEFT, KC_DOWN, KC_RGHT, FN3_KEY, FN2_F22, FN1_F21, KC_ENT,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   }

@@ -86,6 +86,7 @@
 | `FN1_F21` | 短押しでFn1切替、長押しでF21出力 |
 | `FN2_F22` | 短押しでFn2切替、長押しでF22出力 |
 | `FN3_KEY` | ミラーモード関連操作 |
+| `FN4_CUSTOM` | CustomMode切替 |
 | `BOOT_HOLD` | 長押しでブートローダーへ入る |
 
 ## 6. タイミング定数
@@ -350,25 +351,25 @@ Raw HIDにより、ホスト側アプリへ現在のキーボード状態を32�
 | 0 | ZKHK | Esc | Q | W | E | R | T | Y | U | I | O | P | - | Bspc |
 | 1 | F2 | Tab | A | S | D | F | G | H | J | K | L | ; | Ins | Del |
 | 2 | F8 | LShift | Z | X | C | V | B | N | M | , | . | / | Up | RShift |
-| 3 | LCtrl | LGui | LAlt | FN3 | FN2/F22 | FN1/F21 | Space | Enter | FN1/F21 | FN2/F22 | FN3 | Left | Down | Right |
+| 3 | LCtrl | LGui | LAlt | FN3 | FN2/F22 | FN1/F21 | Space | Enter | FN1/F21 | FN2/F22 | FN4 | Left | Down | Right |
 
 ### 15.2 Layer 1: Fn1
 
 | Row | Col0 | Col1 | Col2 | Col3 | Col4 | Col5 | Col6 | Col7 | Col8 | Col9 | Col10 | Col11 | Col12 | Col13 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 0 | ZKHK | Esc | F1 | F2 | F3 | F4 | F5 | = | 7 | 8 | 9 | * | / | Bspc |
-| 1 | F2 | Tab | F6 | F7 | F8 | F9 | F10 | . | 4 | 5 | 6 | + | Ins | Del |
-| 2 | F8 | LShift | F11 | F12 | Ctrl+X | Ctrl+C | Ctrl+V | 0 | 1 | 2 | 3 | - | Up | RShift |
-| 3 | LCtrl | LGui | LAlt | FN3 | FN2/F22 | FN1/F21 | Space | Enter | FN1/F21 | FN2/F22 | FN3 | Left | Down | Right |
+| 0 | ZKHK | Esc | ! | " | # | @ | - | = | 7 | 8 | 9 | * | / | Bspc |
+| 1 | F2 | Tab | % | & | ' | Ctrl+Z | Ctrl+Y | . | 4 | 5 | 6 | + | Ins | Del |
+| 2 | F8 | LShift | No | No | Ctrl+X | Ctrl+C | Ctrl+V | 0 | 1 | 2 | 3 | - | Up | RShift |
+| 3 | LCtrl | LGui | LAlt | FN3 | FN2/F22 | FN1/F21 | Space | Enter | FN1/F21 | FN2/F22 | FN4 | Left | Down | Right |
 
 ### 15.3 Layer 2: Fn2
 
 | Row | Col0 | Col1 | Col2 | Col3 | Col4 | Col5 | Col6 | Col7 | Col8 | Col9 | Col10 | Col11 | Col12 | Col13 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 0 | ZKHK | Esc | No | No | No | No | BOOT_HOLD | _ | : | ^ | No | No | No | Bspc |
-| 1 | PrintScreen | Tab | No | $ | ! | " | % | ( | ) | & | Yen | No | Ins | Del |
-| 2 | No | LShift | No | No | No | # | @ | [ | ] | ~ | \| | No | Up | RShift |
-| 3 | LCtrl | LGui | LAlt | FN3 | FN2/F22 | FN1/F21 | Space | Enter | FN1/F21 | FN2/F22 | FN3 | Left | Down | Right |
+| 0 | ZKHK | Esc | PrintScreen | No | F1 | F2 | BOOT_HOLD | ( | ) | Yen | $ | No | No | Bspc |
+| 1 | F2 | Tab | F3 | F4 | F5 | F6 | F7 | [ | ] | No | No | No | Ins | Del |
+| 2 | F8 | LShift | F8 | F9 | F10 | F11 | F12 | ; | : | ^ | \| | No | Up | RShift |
+| 3 | LCtrl | LGui | LAlt | FN3 | FN2/F22 | FN1/F21 | Space | Enter | FN1/F21 | FN2/F22 | FN4 | Left | Down | Right |
 
 ### 15.4 Layer 3: Base Mirror
 
@@ -392,9 +393,9 @@ Raw HIDにより、ホスト側アプリへ現在のキーボード状態を32�
 
 | Row | Col0 | Col1 | Col2 | Col3 | Col4 | Col5 | Col6 | Col7-Col13 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 0 | Bspc | No | No | No | ^ | : | _ | No |
-| 1 | Del | Ins | No | Yen | & | ) | ( | No |
-| 2 | RShift | Up | No | \| | ~ | ] | [ | No |
+| 0 | Bspc | No | No | $ | Yen | ) | ( | No |
+| 1 | Del | Ins | No | No | No | ] | [ | No |
+| 2 | RShift | Up | No | \| | ^ | : | ; | No |
 | 3 | Left | Down | Right | FN3 | FN2/F22 | FN1/F21 | Enter | No |
 
 ## 16. 日本語配列キー
@@ -416,6 +417,7 @@ Raw HIDにより、ホスト側アプリへ現在のキーボード状態を32�
 - `JP_DLR`: $
 - `JP_EXLM`: !
 - `JP_DQUO`: "
+- `JP_QUOT`: '
 - `JP_PERC`: %
 - `JP_LPRN`: (
 - `JP_RPRN`: )
@@ -481,4 +483,3 @@ FN2上のBOOT_HOLDは1秒長押しでreset_keyboard()します。
 Raw HIDが有効で、32バイトのKLPレポートをホストへ送ります。
 レポートは先頭3バイトが'K','L','P'、バージョン2、ミラー状態、active_slot、アプリ用有効レイヤー、overlay request、押下キー数、row/colペアです。
 ```
-
