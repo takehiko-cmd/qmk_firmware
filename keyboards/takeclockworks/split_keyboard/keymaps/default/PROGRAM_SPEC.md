@@ -63,8 +63,8 @@
 | レイヤー番号 | 定数 | 役割 |
 | --- | --- | --- |
 | 0 | `_BASE` | 通常入力 |
-| 1 | `_FN1` | ファンクションキー / 数字入力 |
-| 2 | `_FN2` | 記号入力 / Bootloader長押し |
+| 1 | `_FN1` | 記号 / 数字入力 |
+| 2 | `_FN2` | ファンクションキー / 記号入力 / Bootloader長押し |
 | 3 | `_BASE_MIRROR` | 片手ミラーモード用Base |
 | 4 | `_FN1_MIRROR` | 片手ミラーモード用Fn1 |
 | 5 | `_FN2_MIRROR` | 片手ミラーモード用Fn2 |
@@ -83,8 +83,8 @@
 
 | キーコード | 役割 |
 | --- | --- |
-| `FN1_F21` | 短押しでFn1切替、長押しでF21出力 |
-| `FN2_F22` | 短押しでFn2切替、長押しでF22出力 |
+| `FN1_F21` | 押下中だけFn1 / Fn1 Mirrorを有効化 |
+| `FN2_F22` | 押下中だけFn2 / Fn2 Mirrorを有効化 |
 | `FN3_KEY` | ミラーモード関連操作 |
 | `FN4_CUSTOM` | CustomMode切替 |
 | `BOOT_HOLD` | 長押しでブートローダーへ入る |
@@ -93,7 +93,7 @@
 
 | 定数 | 値 | 意味 |
 | --- | --- | --- |
-| `FN_KEY_DELAY_MS` | 1000 ms | Fnキーを長押し扱いにする時間 |
+| `FN_KEY_DELAY_MS` | 1000 ms | FN3長押しを判定する時間 |
 | `F_KEY_DELAY_MS` | 500 ms | F1-F12を長押し扱いにする時間 |
 | `BOOT_KEY_DELAY_MS` | 1000 ms | Bootloader起動に必要な長押し時間 |
 | `F_KEY_COUNT` | 12 | F1-F12の数 |
@@ -103,30 +103,42 @@
 
 ### 7.1 `FN1_F21`
 
-短押し:
+押下時:
 
-- 現在Fn2ならBaseへ戻る。
-- それ以外ならFn1をトグルする。
+- `fn1_hold_count` を加算する。
+- `active_slot = SLOT_FN1` にする。ただしFn2が押されている場合はFn2を優先する。
+- `sync_layers()` で、現在の `is_mirror_mode` に応じて `_FN1` または `_FN1_MIRROR` へ同期する。
 
-長押し:
+離上時:
 
-- 1秒以上押すと `KC_F21` を押下登録する。
-- 押している間はF21を保持する。
-- 離すとF21を解除する。
-- 長押し判定前に離したが1秒以上経過していた場合はF21をタップ送信する。
+- `fn1_hold_count` を0未満にならないよう減算する。
+- Fn2が押されていれば `active_slot = SLOT_FN2` にする。
+- Fn2が押されておらずFn1も残っていなければ `active_slot = SLOT_BASE` に戻す。
+- `FN1_F21` 単体では `KC_F21` を送信しない。
 
 ### 7.2 `FN2_F22`
 
-短押し:
+押下時:
 
-- Fn2をトグルする。
+- `fn2_hold_count` を加算する。
+- `active_slot = SLOT_FN2` にする。
+- `sync_layers()` で、現在の `is_mirror_mode` に応じて `_FN2` または `_FN2_MIRROR` へ同期する。
 
-長押し:
+離上時:
 
-- 1秒以上押すと `KC_F22` を押下登録する。
-- 押している間はF22を保持する。
-- 離すとF22を解除する。
-- 長押し判定前に離したが1秒以上経過していた場合はF22をタップ送信する。
+- `fn2_hold_count` を0未満にならないよう減算する。
+- Fn1が押されていれば `active_slot = SLOT_FN1` に戻す。
+- Fn1も押されていなければ `active_slot = SLOT_BASE` に戻す。
+- `FN2_F22` 単体では `KC_F22` を送信しない。
+
+### 7.3 Fn1 / Fn2の同時押し
+
+Fn1とFn2が同時に押されている場合はFn2を優先する。
+
+- Fn1押下中にFn2を押すとFn2へ切り替わる。
+- Fn2を離してFn1が残っている場合はFn1へ戻る。
+- Fn1とFn2の両方を離すとBaseへ戻る。
+- 左右に同じFnキーが複数あるため、状態はboolではなく `fn1_hold_count` / `fn2_hold_count` で管理する。
 
 ## 8. `FN3_KEY` の動作
 
@@ -351,7 +363,7 @@ Raw HIDにより、ホスト側アプリへ現在のキーボード状態を32�
 | 0 | ZKHK | Esc | Q | W | E | R | T | Y | U | I | O | P | - | Bspc |
 | 1 | F2 | Tab | A | S | D | F | G | H | J | K | L | ; | Ins | Del |
 | 2 | F8 | LShift | Z | X | C | V | B | N | M | , | . | / | Up | RShift |
-| 3 | LCtrl | LGui | LAlt | FN3 | FN2/F22 | FN1/F21 | Space | Enter | FN1/F21 | FN2/F22 | FN4 | Left | Down | Right |
+| 3 | LCtrl | LGui | LAlt | FN3 | Fn2 Hold | Fn1 Hold | Space | Enter | Fn1 Hold | Fn2 Hold | FN4 | Left | Down | Right |
 
 ### 15.2 Layer 1: Fn1
 
@@ -360,7 +372,7 @@ Raw HIDにより、ホスト側アプリへ現在のキーボード状態を32�
 | 0 | ZKHK | Esc | ! | " | # | @ | - | = | 7 | 8 | 9 | * | / | Bspc |
 | 1 | F2 | Tab | % | & | ' | Ctrl+Z | Ctrl+Y | . | 4 | 5 | 6 | + | Ins | Del |
 | 2 | F8 | LShift | No | No | Ctrl+X | Ctrl+C | Ctrl+V | 0 | 1 | 2 | 3 | - | Up | RShift |
-| 3 | LCtrl | LGui | LAlt | FN3 | FN2/F22 | FN1/F21 | Space | Enter | FN1/F21 | FN2/F22 | FN4 | Left | Down | Right |
+| 3 | LCtrl | LGui | LAlt | FN3 | Fn2 Hold | Fn1 Hold | Space | Enter | Fn1 Hold | Fn2 Hold | FN4 | Left | Down | Right |
 
 ### 15.3 Layer 2: Fn2
 
@@ -369,7 +381,7 @@ Raw HIDにより、ホスト側アプリへ現在のキーボード状態を32�
 | 0 | ZKHK | Esc | PrintScreen | No | F1 | F2 | BOOT_HOLD | ( | ) | Yen | $ | No | No | Bspc |
 | 1 | F2 | Tab | F3 | F4 | F5 | F6 | F7 | [ | ] | No | No | No | Ins | Del |
 | 2 | F8 | LShift | F8 | F9 | F10 | F11 | F12 | ; | : | ^ | \| | No | Up | RShift |
-| 3 | LCtrl | LGui | LAlt | FN3 | FN2/F22 | FN1/F21 | Space | Enter | FN1/F21 | FN2/F22 | FN4 | Left | Down | Right |
+| 3 | LCtrl | LGui | LAlt | FN3 | Fn2 Hold | Fn1 Hold | Space | Enter | Fn1 Hold | Fn2 Hold | FN4 | Left | Down | Right |
 
 ### 15.4 Layer 3: Base Mirror
 
@@ -378,7 +390,7 @@ Raw HIDにより、ホスト側アプリへ現在のキーボード状態を32�
 | 0 | Bspc | - | P | O | I | U | Y | No |
 | 1 | Del | Ins | ; | L | K | J | H | No |
 | 2 | RShift | Up | / | . | , | M | N | No |
-| 3 | Left | Down | Right | FN3 | FN2/F22 | FN1/F21 | Enter | No |
+| 3 | Left | Down | Right | FN3 | Fn2 Hold | Fn1 Hold | Enter | No |
 
 ### 15.5 Layer 4: Fn1 Mirror
 
@@ -387,7 +399,7 @@ Raw HIDにより、ホスト側アプリへ現在のキーボード状態を32�
 | 0 | Bspc | / | * | 7 | 8 | 9 | = | No |
 | 1 | Del | Ins | + | 4 | 5 | 6 | . | No |
 | 2 | RShift | Up | - | 1 | 2 | 3 | 0 | No |
-| 3 | Left | Down | Right | FN3 | FN2/F22 | FN1/F21 | Enter | No |
+| 3 | Left | Down | Right | FN3 | Fn2 Hold | Fn1 Hold | Enter | No |
 
 ### 15.6 Layer 5: Fn2 Mirror
 
@@ -396,7 +408,7 @@ Raw HIDにより、ホスト側アプリへ現在のキーボード状態を32�
 | 0 | Bspc | No | No | $ | Yen | ) | ( | No |
 | 1 | Del | Ins | No | No | No | ] | [ | No |
 | 2 | RShift | Up | No | \| | ^ | : | ; | No |
-| 3 | Left | Down | Right | FN3 | FN2/F22 | FN1/F21 | Enter | No |
+| 3 | Left | Down | Right | FN3 | Fn2 Hold | Fn1 Hold | Enter | No |
 
 ## 16. 日本語配列キー
 
@@ -435,14 +447,14 @@ Raw HIDにより、ホスト側アプリへ現在のキーボード状態を32�
 | 関数 | 役割 |
 | --- | --- |
 | `process_record_user()` | 全キー入力の前処理。右側ブロック、Ctrl矢印変換、Fキー遅延、独自キー処理を行う |
-| `matrix_scan_user()` | 長押し判定、Bootloader判定、Raw HID状態通知を行う |
+| `matrix_scan_user()` | F1-F12長押し判定、FN3長押し判定、Bootloader判定、Raw HID状態通知を行う |
 | `layer_state_set_user()` | QMKレイヤー変化から内部状態を同期する |
 | `keyboard_post_init_user()` | 起動後にRaw HID状態通知を行う |
 | `sync_layers()` | 内部状態に合わせてQMKレイヤーをon/offする |
 | `set_status_from_layer()` | QMKの最高レイヤーから `active_slot` とミラー状態を復元する |
 | `send_keyboard_layer_status()` | 通常Raw HID状態通知を送る |
 | `send_keyboard_layer_overlay()` | オーバーレイ要求付きRaw HID通知を送る |
-| `handle_fn_key()` | FN1/FN2の短押し・長押し処理 |
+| `handle_momentary_fn_key()` | FN1/FN2の押下中のみ有効なレイヤー切替処理 |
 | `handle_fn3_key()` | FN3の短押し・長押し処理 |
 | `handle_delayed_f_key()` | F1-F12の遅延出力処理 |
 | `handle_ctrl_arrow()` | Ctrl+矢印をPage/Home/End系へ変換 |
@@ -472,7 +484,7 @@ RAW_ENABLE = yes
 左側はQMK列0-6、右側はQMK列7-13です。
 
 keymap.cにはBase/Fn1/Fn2と、それぞれのMirror版の合計6レイヤーがあります。
-FN1_F21とFN2_F22は短押しでレイヤートグル、1秒長押しでF21/F22出力です。
+FN1_F21とFN2_F22は押している間だけFn1/Fn2レイヤーを有効にするモーメンタリキーです。Fn2はFn1より優先され、F21/F22キーイベントは送信しません。
 FN3_KEYはミラーモード制御で、左側FN3の1秒長押しでミラー機能全体をON/OFFし、ミラー機能ON中の短押しで左側通常面と左側ミラー面を切り替えます。
 ミラー機能ONかつ通常左側面表示中は、物理右側キーをブロックします。
 

@@ -91,30 +91,18 @@ enum klp_v3_host_command {
     KLP_V3_COMMAND_STATUS_REQUEST,
 };
 
-enum fn_key_indexes {
-    FN_KEY_1 = 0,
-    FN_KEY_2,
-    FN_KEY_COUNT,
-};
-
 enum layer_slot {
     SLOT_BASE = 0,
     SLOT_FN1,
     SLOT_FN2,
 };
 
-static const uint16_t fn_output_keycodes[FN_KEY_COUNT] = {
-    KC_F21,
-    KC_F22,
-};
-
-static uint16_t         fn_timers[FN_KEY_COUNT];
-static uint8_t          fn_press_counts[FN_KEY_COUNT];
-static bool             fn_registered[FN_KEY_COUNT];
 static uint16_t         f_key_timers[F_KEY_COUNT];
 static uint8_t          f_key_press_counts[F_KEY_COUNT];
 static bool             f_key_registered[F_KEY_COUNT];
 static enum layer_slot  active_slot = SLOT_BASE;
+static uint8_t          fn1_hold_count;
+static uint8_t          fn2_hold_count;
 static bool             mirror_mode_enabled;
 static bool             is_mirror_mode;
 static bool             custom_mode_enabled;
@@ -341,13 +329,6 @@ static void set_custom_mode_enabled(bool enabled) {
     send_custom_mode_state();
 }
 
-static void release_registered_fn_output(uint8_t fn_index) {
-    if (fn_registered[fn_index]) {
-        unregister_code16(fn_output_keycodes[fn_index]);
-        fn_registered[fn_index] = false;
-    }
-}
-
 static bool get_f_key_index(uint16_t keycode, uint8_t *index) {
     if (keycode < KC_F1 || keycode > KC_F12) {
         return false;
@@ -397,11 +378,6 @@ static bool handle_delayed_f_key(uint16_t keycode, keyrecord_t *record) {
     return false;
 }
 
-static void toggle_active_slot(enum layer_slot slot) {
-    active_slot = active_slot == slot ? SLOT_BASE : slot;
-    sync_layers();
-}
-
 static void handle_fn3_short_tap(void) {
     if (!mirror_mode_enabled) {
         return;
@@ -412,20 +388,45 @@ static void handle_fn3_short_tap(void) {
     send_keyboard_layer_overlay(is_mirror_mode ? KLP_OVERLAY_MIRROR_KEYBOARD : KLP_OVERLAY_LEFT_SIDE_ONLY);
 }
 
-static void handle_short_fn_tap(uint8_t fn_index) {
-    switch (fn_index) {
-        case FN_KEY_1:
-            if (active_slot == SLOT_FN2) {
-                active_slot = SLOT_BASE;
-                sync_layers();
-            } else {
-                toggle_active_slot(SLOT_FN1);
-            }
-            break;
-        case FN_KEY_2:
-            toggle_active_slot(SLOT_FN2);
-            break;
+static void update_momentary_fn_slot(void) {
+    enum layer_slot next_slot = SLOT_BASE;
+
+    if (fn2_hold_count > 0) {
+        next_slot = SLOT_FN2;
+    } else if (fn1_hold_count > 0) {
+        next_slot = SLOT_FN1;
     }
+
+    if (active_slot != next_slot) {
+        active_slot = next_slot;
+        sync_layers();
+    }
+}
+
+static bool handle_momentary_fn_key(uint16_t keycode, keyrecord_t *record) {
+    uint8_t *hold_count = NULL;
+
+    switch (keycode) {
+        case FN1_F21:
+            hold_count = &fn1_hold_count;
+            break;
+        case FN2_F22:
+            hold_count = &fn2_hold_count;
+            break;
+        default:
+            return true;
+    }
+
+    if (record->event.pressed) {
+        if (*hold_count < 255) {
+            (*hold_count)++;
+        }
+    } else if (*hold_count > 0) {
+        (*hold_count)--;
+    }
+
+    update_momentary_fn_slot();
+    return false;
 }
 
 static void handle_fn3_mirror_toggle(void) {
@@ -469,40 +470,6 @@ static void handle_fn3_key(keyrecord_t *record) {
         handle_fn3_mirror_toggle();
     } else {
         handle_fn3_short_tap();
-    }
-}
-
-static void handle_fn_key(uint8_t fn_index, bool pressed) {
-    if (pressed) {
-        if (fn_press_counts[fn_index] == 0) {
-            fn_timers[fn_index]     = timer_read();
-            fn_registered[fn_index] = false;
-        }
-        fn_press_counts[fn_index]++;
-        return;
-    }
-
-    if (fn_press_counts[fn_index] > 0) {
-        fn_press_counts[fn_index]--;
-    } else {
-        return;
-    }
-
-    if (fn_press_counts[fn_index] > 0) {
-        return;
-    }
-
-    uint16_t elapsed    = timer_elapsed(fn_timers[fn_index]);
-    bool     long_press = fn_registered[fn_index] || elapsed >= FN_KEY_DELAY_MS;
-
-    if (fn_registered[fn_index]) {
-        release_registered_fn_output(fn_index);
-    } else if (long_press) {
-        tap_code16(fn_output_keycodes[fn_index]);
-    }
-
-    if (!long_press) {
-        handle_short_fn_tap(fn_index);
     }
 }
 
@@ -564,13 +531,6 @@ static bool is_custom_keycode(uint16_t keycode) {
     return keycode >= CUSTOM_KEY_00 && keycode <= CUSTOM_KEY_25;
 }
 
-static void leave_custom_mode_for_slot(enum layer_slot slot) {
-    custom_mode_enabled = false;
-    active_slot         = slot;
-    sync_layers();
-    send_custom_mode_state();
-}
-
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     if (should_block_right_side_key(record)) {
         return false;
@@ -584,15 +544,16 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     if (custom_mode_enabled) {
         switch (keycode) {
             case FN1_F21:
-                if (record->event.pressed) {
-                    leave_custom_mode_for_slot(SLOT_FN1);
-                }
-                return false;
             case FN2_F22:
                 if (record->event.pressed) {
-                    leave_custom_mode_for_slot(SLOT_FN2);
+                    bool handled;
+
+                    custom_mode_enabled = false;
+                    handled = handle_momentary_fn_key(keycode, record);
+                    send_custom_mode_state();
+                    return handled;
                 }
-                return false;
+                return handle_momentary_fn_key(keycode, record);
             case FN3_KEY:
                 return false;
             case FN4_CUSTOM:
@@ -613,11 +574,8 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 
     switch (keycode) {
         case FN1_F21:
-            handle_fn_key(FN_KEY_1, record->event.pressed);
-            return false;
         case FN2_F22:
-            handle_fn_key(FN_KEY_2, record->event.pressed);
-            return false;
+            return handle_momentary_fn_key(keycode, record);
         case FN3_KEY:
             handle_fn3_key(record);
             return false;
@@ -643,13 +601,6 @@ void matrix_scan_user(void) {
     if (boot_pressed && !boot_triggered && timer_elapsed(boot_timer) >= BOOT_KEY_DELAY_MS) {
         boot_triggered = true;
         reset_keyboard();
-    }
-
-    for (uint8_t i = 0; i < FN_KEY_COUNT; i++) {
-        if (fn_press_counts[i] > 0 && !fn_registered[i] && timer_elapsed(fn_timers[i]) >= FN_KEY_DELAY_MS) {
-            register_code16(fn_output_keycodes[i]);
-            fn_registered[i] = true;
-        }
     }
 
     for (uint8_t i = 0; i < F_KEY_COUNT; i++) {
