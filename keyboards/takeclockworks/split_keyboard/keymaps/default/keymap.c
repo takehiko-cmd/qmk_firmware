@@ -12,10 +12,8 @@ enum layers {
     _BASE = 0,
     _FN1,
     _FN2,
-    _BASE_MIRROR,
-    _FN1_MIRROR,
-    _FN2_MIRROR,
-    _CUSTOM_MODE = 6,
+    _FN3,
+    _CUSTOM_MODE,
 };
 
 enum custom_keycodes {
@@ -52,8 +50,6 @@ enum custom_keycodes {
     CUSTOM_KEY_25,
 };
 
-#define F_KEY_DELAY_MS 500
-#define F_KEY_COUNT 12
 #define BOOT_KEY_DELAY_MS 1000
 #define KLP_REPORT_SIZE 32
 #define KLP_PROTOCOL_VERSION 2
@@ -64,12 +60,9 @@ enum custom_keycodes {
 #define KLP_V3_MAX_PRESSED_KEYS 9
 #define KLP_V3_PRESSED_COUNT_OFFSET 12
 #define KLP_V3_PRESSED_KEYS_OFFSET 13
-#define RIGHT_SIDE_START_COL 7
 
 enum klp_overlay_request {
     KLP_OVERLAY_NONE = 0,
-    KLP_OVERLAY_MIRROR_KEYBOARD,
-    KLP_OVERLAY_LEFT_SIDE_ONLY,
 };
 
 enum klp_v3_message_type {
@@ -94,20 +87,15 @@ enum layer_slot {
     SLOT_BASE = 0,
     SLOT_FN1,
     SLOT_FN2,
+    SLOT_FN3,
 };
 
-static uint16_t         f_key_timers[F_KEY_COUNT];
-static uint8_t          f_key_press_counts[F_KEY_COUNT];
-static bool             f_key_registered[F_KEY_COUNT];
 static enum layer_slot  active_slot = SLOT_BASE;
 static uint8_t          fn1_hold_count;
 static uint8_t          fn2_hold_count;
-static bool             mirror_mode_enabled;
-static bool             is_mirror_mode;
+static uint8_t          fn3_hold_count;
 static bool             custom_mode_enabled;
 static bool             syncing_layers;
-static uint8_t          fn3_press_count;
-static bool             mirror_overlay_held;
 static uint16_t         boot_timer;
 static bool             boot_pressed;
 static bool             boot_triggered;
@@ -123,11 +111,11 @@ enum ctrl_arrow_index {
 };
 
 static uint8_t get_effective_app_layer(void) {
-    return (is_mirror_mode ? 3 : 0) + active_slot;
+    return active_slot;
 }
 
 static uint8_t get_keyboard_layer_overlay_request(void) {
-    return mirror_overlay_held ? KLP_OVERLAY_MIRROR_KEYBOARD : KLP_OVERLAY_NONE;
+    return KLP_OVERLAY_NONE;
 }
 
 static void add_pressed_keys_to_report_at(uint8_t *report, uint8_t count_offset, uint8_t keys_offset, uint8_t max_pressed_keys) {
@@ -171,7 +159,7 @@ static void send_keyboard_layer_report(void) {
     report[1]          = 'L';
     report[2]          = 'P';
     report[3]          = KLP_PROTOCOL_VERSION;
-    report[4]          = is_mirror_mode ? 1 : 0;
+    report[4]          = 0;
     report[5]          = active_slot;
     report[6]          = get_effective_app_layer();
     report[7]          = overlay_request;
@@ -204,7 +192,7 @@ static void send_custom_mode_report(uint8_t message_type, uint8_t custom_key_id,
     report[2]  = 'P';
     report[3]  = KLP_CUSTOM_PROTOCOL_VERSION;
     report[4]  = message_type;
-    report[5]  = is_mirror_mode ? 1 : 0;
+    report[5]  = 0;
     report[6]  = active_slot;
     report[7]  = get_effective_app_layer();
     report[8]  = get_keyboard_layer_overlay_request();
@@ -232,36 +220,18 @@ static void set_status_from_layer(layer_state_t state) {
     state &= ~((layer_state_t)1u << _CUSTOM_MODE);
 
     switch (get_highest_layer(state)) {
-        case _FN2_MIRROR:
-            mirror_mode_enabled = true;
-            is_mirror_mode = true;
-            active_slot    = SLOT_FN2;
-            break;
-        case _FN1_MIRROR:
-            mirror_mode_enabled = true;
-            is_mirror_mode = true;
-            active_slot    = SLOT_FN1;
-            break;
-        case _BASE_MIRROR:
-            mirror_mode_enabled = true;
-            is_mirror_mode = true;
-            active_slot    = SLOT_BASE;
+        case _FN3:
+            active_slot = SLOT_FN3;
             break;
         case _FN2:
-            mirror_mode_enabled = false;
-            is_mirror_mode = false;
-            active_slot    = SLOT_FN2;
+            active_slot = SLOT_FN2;
             break;
         case _FN1:
-            mirror_mode_enabled = false;
-            is_mirror_mode = false;
-            active_slot    = SLOT_FN1;
+            active_slot = SLOT_FN1;
             break;
         case _BASE:
         default:
-            mirror_mode_enabled = false;
-            is_mirror_mode = false;
-            active_slot    = SLOT_BASE;
+            active_slot = SLOT_BASE;
             break;
     }
 }
@@ -271,35 +241,21 @@ static void sync_layers(void) {
 
     layer_off(_FN1);
     layer_off(_FN2);
-    layer_off(_BASE_MIRROR);
-    layer_off(_FN1_MIRROR);
-    layer_off(_FN2_MIRROR);
+    layer_off(_FN3);
 
-    if (is_mirror_mode) {
-        switch (active_slot) {
-            case SLOT_FN1:
-                layer_on(_FN1_MIRROR);
-                break;
-            case SLOT_FN2:
-                layer_on(_FN2_MIRROR);
-                break;
-            case SLOT_BASE:
-            default:
-                layer_on(_BASE_MIRROR);
-                break;
-        }
-    } else {
-        switch (active_slot) {
-            case SLOT_FN1:
-                layer_on(_FN1);
-                break;
-            case SLOT_FN2:
-                layer_on(_FN2);
-                break;
-            case SLOT_BASE:
-            default:
-                break;
-        }
+    switch (active_slot) {
+        case SLOT_FN1:
+            layer_on(_FN1);
+            break;
+        case SLOT_FN2:
+            layer_on(_FN2);
+            break;
+        case SLOT_FN3:
+            layer_on(_FN3);
+            break;
+        case SLOT_BASE:
+        default:
+            break;
     }
 
     if (custom_mode_enabled) {
@@ -324,59 +280,12 @@ static void set_custom_mode_enabled(bool enabled) {
     send_custom_mode_state();
 }
 
-static bool get_f_key_index(uint16_t keycode, uint8_t *index) {
-    if (keycode < KC_F1 || keycode > KC_F12) {
-        return false;
-    }
-
-    *index = keycode - KC_F1;
-    return true;
-}
-
-static void release_registered_f_key(uint8_t f_key_index) {
-    if (f_key_registered[f_key_index]) {
-        unregister_code16(KC_F1 + f_key_index);
-        f_key_registered[f_key_index] = false;
-    }
-}
-
-static bool handle_delayed_f_key(uint16_t keycode, keyrecord_t *record) {
-    uint8_t f_key_index;
-
-    if (!get_f_key_index(keycode, &f_key_index)) {
-        return true;
-    }
-
-    if (record->event.pressed) {
-        if (f_key_press_counts[f_key_index] == 0) {
-            f_key_timers[f_key_index]     = timer_read();
-            f_key_registered[f_key_index] = false;
-        }
-        f_key_press_counts[f_key_index]++;
-        return false;
-    }
-
-    if (f_key_press_counts[f_key_index] > 0) {
-        f_key_press_counts[f_key_index]--;
-    }
-
-    if (f_key_press_counts[f_key_index] > 0) {
-        return false;
-    }
-
-    if (f_key_registered[f_key_index]) {
-        release_registered_f_key(f_key_index);
-    } else if (timer_elapsed(f_key_timers[f_key_index]) >= F_KEY_DELAY_MS) {
-        tap_code16(keycode);
-    }
-
-    return false;
-}
-
 static void update_momentary_fn_slot(void) {
     enum layer_slot next_slot = SLOT_BASE;
 
-    if (fn2_hold_count > 0) {
+    if (fn3_hold_count > 0) {
+        next_slot = SLOT_FN3;
+    } else if (fn2_hold_count > 0) {
         next_slot = SLOT_FN2;
     } else if (fn1_hold_count > 0) {
         next_slot = SLOT_FN1;
@@ -398,6 +307,9 @@ static bool handle_momentary_fn_key(uint16_t keycode, keyrecord_t *record) {
         case FN2_F22:
             hold_count = &fn2_hold_count;
             break;
+        case FN3_KEY:
+            hold_count = &fn3_hold_count;
+            break;
         default:
             return true;
     }
@@ -412,35 +324,6 @@ static bool handle_momentary_fn_key(uint16_t keycode, keyrecord_t *record) {
 
     update_momentary_fn_slot();
     return false;
-}
-
-static void handle_fn3_key(keyrecord_t *record) {
-    if (record->event.pressed) {
-        if (fn3_press_count < 255) {
-            fn3_press_count++;
-        }
-
-        if (fn3_press_count == 1) {
-            mirror_overlay_held = true;
-            mirror_mode_enabled = true;
-            is_mirror_mode      = true;
-            sync_layers();
-        }
-        return;
-    }
-
-    if (fn3_press_count > 0) {
-        fn3_press_count--;
-    }
-
-    if (fn3_press_count > 0) {
-        return;
-    }
-
-    mirror_overlay_held = false;
-    mirror_mode_enabled = false;
-    is_mirror_mode      = false;
-    sync_layers();
 }
 
 static bool handle_ctrl_arrow(uint16_t keycode, keyrecord_t *record) {
@@ -493,19 +376,11 @@ static bool handle_ctrl_arrow(uint16_t keycode, keyrecord_t *record) {
     return false;
 }
 
-static bool should_block_right_side_key(keyrecord_t *record) {
-    return !custom_mode_enabled && mirror_mode_enabled && !is_mirror_mode && record->event.key.col >= RIGHT_SIDE_START_COL;
-}
-
 static bool is_custom_keycode(uint16_t keycode) {
     return keycode >= CUSTOM_KEY_00 && keycode <= CUSTOM_KEY_25;
 }
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
-    if (should_block_right_side_key(record)) {
-        return false;
-    }
-
     if (is_custom_keycode(keycode)) {
         send_custom_key_event(keycode - CUSTOM_KEY_00, record->event.pressed);
         return false;
@@ -515,6 +390,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         switch (keycode) {
             case FN1_F21:
             case FN2_F22:
+            case FN3_KEY:
                 if (record->event.pressed) {
                     bool handled;
 
@@ -524,8 +400,6 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
                     return handled;
                 }
                 return handle_momentary_fn_key(keycode, record);
-            case FN3_KEY:
-                return false;
             case FN4_CUSTOM:
                 if (record->event.pressed) {
                     set_custom_mode_enabled(false);
@@ -538,17 +412,11 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         return false;
     }
 
-    if (!handle_delayed_f_key(keycode, record)) {
-        return false;
-    }
-
     switch (keycode) {
         case FN1_F21:
         case FN2_F22:
-            return handle_momentary_fn_key(keycode, record);
         case FN3_KEY:
-            handle_fn3_key(record);
-            return false;
+            return handle_momentary_fn_key(keycode, record);
         case FN4_CUSTOM:
             if (record->event.pressed) {
                 set_custom_mode_enabled(!custom_mode_enabled);
@@ -571,13 +439,6 @@ void matrix_scan_user(void) {
     if (boot_pressed && !boot_triggered && timer_elapsed(boot_timer) >= BOOT_KEY_DELAY_MS) {
         boot_triggered = true;
         reset_keyboard();
-    }
-
-    for (uint8_t i = 0; i < F_KEY_COUNT; i++) {
-        if (f_key_press_counts[i] > 0 && !f_key_registered[i] && timer_elapsed(f_key_timers[i]) >= F_KEY_DELAY_MS) {
-            register_code16(KC_F1 + i);
-            f_key_registered[i] = true;
-        }
     }
 
     send_keyboard_layer_status();
@@ -627,7 +488,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
  */
 [_BASE] = {
     // Row0
-    { JP_ZKHK, KC_ESC,  KC_Q,    KC_W,    KC_E,    KC_R,    KC_T,     KC_Y,    KC_U,    KC_I,    KC_O,    KC_P,    JP_MINS, KC_BSPC },
+    { KC_PSCR, KC_ESC,  KC_Q,    KC_W,    KC_E,    KC_R,    KC_T,     KC_Y,    KC_U,    KC_I,    KC_O,    KC_P,    JP_MINS, KC_BSPC },
 
     // Row1
     { KC_F2,   KC_TAB,  KC_A,    KC_S,    KC_D,    KC_F,    KC_G,     KC_H,    KC_J,    KC_K,    KC_L,    JP_SCLN, KC_INS,  KC_DEL  },
@@ -636,99 +497,65 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     { KC_F8,   KC_LSFT, KC_Z,    KC_X,    KC_C,    KC_V,    KC_B,     KC_N,    KC_M,    JP_COMM, JP_DOT,  JP_SLSH, KC_UP,   KC_RSFT },
 
     // Row3
-    { KC_LCTL, KC_LGUI, KC_LALT, FN3_KEY, FN2_F22, FN1_F21, KC_SPC,   KC_ENT,  FN1_F21, FN2_F22, FN4_CUSTOM, KC_LEFT, KC_DOWN, KC_RGHT }
+    { KC_LGUI, KC_LCTL, KC_LALT, FN1_F21, FN3_KEY, JP_ZKHK, KC_SPC,   KC_ENT,  KC_LCTL, KC_BSPC, FN2_F22, KC_LEFT, KC_DOWN, KC_RGHT }
 },
 
 /*
  * [1] Fn1
- * Symbols / numbers
+ * Numbers
  */
 [_FN1] = {
     // Row0
-    { JP_ZKHK, KC_ESC,  JP_EXLM, JP_DQUO, JP_HASH, JP_AT,   JP_MINS,  JP_EQL,  KC_7,    KC_8,    KC_9,    JP_ASTR, JP_SLSH, KC_BSPC },
+    { KC_PSCR, KC_ESC,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,    JP_EQL,  KC_7,    KC_8,    KC_9,    JP_PLUS, JP_MINS, KC_BSPC },
 
     // Row1
-    { KC_F2,   KC_TAB,  JP_PERC, JP_AMPR, JP_QUOT, LCTL(KC_Z), LCTL(KC_Y), JP_DOT,  KC_4,    KC_5,    KC_6,    JP_PLUS, KC_INS,  KC_DEL  },
+    { KC_F2,   KC_TAB,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,    JP_COLN, KC_4,    KC_5,    KC_6,    JP_ASTR, KC_INS,  KC_DEL  },
 
     // Row2
-    { KC_F8,   KC_LSFT, KC_NO,   KC_NO,   LCTL(KC_X), LCTL(KC_C), LCTL(KC_V), KC_0,    KC_1,    KC_2,    KC_3,    JP_MINS, KC_UP,   KC_RSFT },
+    { KC_F8,   KC_LSFT, KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,    JP_DOT,  KC_1,    KC_2,    KC_3,    JP_SLSH, KC_UP,   KC_RSFT },
 
     // Row3
-    { KC_LCTL, KC_LGUI, KC_LALT, FN3_KEY, FN2_F22, FN1_F21, KC_SPC,   KC_ENT,  FN1_F21, FN2_F22, FN4_CUSTOM, KC_LEFT, KC_DOWN, KC_RGHT }
+    { KC_LGUI, KC_LCTL, KC_LALT, FN1_F21, KC_NO,   JP_ZKHK, KC_SPC,   KC_ENT,  KC_0,    KC_BSPC, KC_NO,   KC_LEFT, KC_DOWN, KC_RGHT }
 },
 
 /*
  * [2] Fn2
- * Function keys / symbols
+ * Symbols / boot
  */
 [_FN2] = {
     // Row0
-    { JP_ZKHK, KC_ESC,  KC_PSCR, KC_NO,   KC_F1,   KC_F2,   BOOT_HOLD, JP_LPRN, JP_RPRN, JP_YEN,  JP_DLR,  KC_NO,   KC_NO,   KC_BSPC },
+    { JP_ZKHK, KC_ESC,  JP_EXLM, JP_DQUO, JP_HASH, JP_AT,   JP_UNDS,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_BSPC },
 
     // Row1
-    { KC_F2,   KC_TAB,  KC_F3,   KC_F4,   KC_F5,   KC_F6,   KC_F7,    JP_LBRC, JP_RBRC, KC_NO,   KC_NO,   KC_NO,   KC_INS,  KC_DEL  },
+    { KC_PSCR, KC_TAB,  JP_PERC, JP_AMPR, JP_QUOT, JP_LPRN, JP_RPRN,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_INS,  KC_DEL  },
 
     // Row2
-    { KC_F8,   KC_LSFT, KC_F8,   KC_F9,   KC_F10,  KC_F11,  KC_F12,   JP_SCLN, JP_COLN, JP_CIRC, JP_PIPE, KC_NO,   KC_UP,   KC_RSFT },
+    { BOOT_HOLD, KC_LSFT, JP_YEN, JP_DLR,  JP_PIPE, JP_LBRC, JP_RBRC, KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_UP,   KC_RSFT },
 
     // Row3
-    { KC_LCTL, KC_LGUI, KC_LALT, FN3_KEY, FN2_F22, FN1_F21, KC_SPC,   KC_ENT,  FN1_F21, FN2_F22, FN4_CUSTOM, KC_LEFT, KC_DOWN, KC_RGHT }
+    { KC_LGUI, KC_LCTL, KC_LALT, KC_NO,   KC_NO,   JP_ZKHK, KC_SPC,   KC_ENT,  KC_NO,   KC_BSPC, FN2_F22, KC_LEFT, KC_DOWN, KC_RGHT }
 },
 
 /*
- * [3] Base Mirror
- * One-hand mode mirrors the effective right side onto the left side.
+ * [3] Fn3
+ * Function keys
  */
-[_BASE_MIRROR] = {
+[_FN3] = {
     // Row0
-    { KC_BSPC, JP_MINS, KC_P,    KC_O,    KC_I,    KC_U,    KC_Y,     KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
+    { KC_PSCR, KC_ESC,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,    KC_F1,   KC_F2,   KC_F3,   KC_F4,   KC_F5,   KC_NO,   KC_BSPC },
 
     // Row1
-    { KC_DEL,  KC_INS,  JP_SCLN, KC_L,    KC_K,    KC_J,    KC_H,     KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
+    { KC_NO,   KC_TAB,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,    KC_F6,   KC_F7,   KC_F8,   KC_F9,   KC_F10,  KC_INS,  KC_DEL  },
 
     // Row2
-    { KC_RSFT, KC_UP,   JP_SLSH, JP_DOT,  JP_COMM, KC_M,    KC_N,     KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
+    { BOOT_HOLD, KC_LSFT, KC_NO, KC_NO,   KC_NO,   KC_NO,   KC_NO,    KC_F11,  KC_F12,  KC_NO,   KC_NO,   KC_NO,   KC_UP,   KC_RSFT },
 
     // Row3
-    { KC_LEFT, KC_DOWN, KC_RGHT, FN3_KEY, FN2_F22, FN1_F21, KC_ENT,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   }
+    { KC_LGUI, KC_LCTL, KC_LALT, KC_NO,   FN3_KEY, KC_NO,   KC_SPC,   KC_ENT,  KC_LCTL, KC_BSPC, KC_NO,   KC_LEFT, KC_DOWN, KC_RGHT }
 },
 
 /*
- * [4] Fn1 Mirror
- */
-[_FN1_MIRROR] = {
-    // Row0
-    { KC_BSPC, JP_SLSH, JP_ASTR, KC_7,    KC_8,    KC_9,    JP_EQL,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
-
-    // Row1
-    { KC_DEL,  KC_INS,  JP_PLUS, KC_4,    KC_5,    KC_6,    JP_DOT,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
-
-    // Row2
-    { KC_RSFT, KC_UP,   JP_MINS, KC_1,    KC_2,    KC_3,    KC_0,     KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
-
-    // Row3
-    { KC_LEFT, KC_DOWN, KC_RGHT, FN3_KEY, FN2_F22, FN1_F21, KC_ENT,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   }
-},
-
-/*
- * [5] Fn2 Mirror
- */
-[_FN2_MIRROR] = {
-    // Row0
-    { KC_BSPC, KC_NO,   KC_NO,   JP_DLR,  JP_YEN,  JP_RPRN, JP_LPRN,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
-
-    // Row1
-    { KC_DEL,  KC_INS,  KC_NO,   KC_NO,   KC_NO,   JP_RBRC, JP_LBRC,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
-
-    // Row2
-    { KC_RSFT, KC_UP,   KC_NO,   JP_PIPE, JP_CIRC, JP_COLN, JP_SCLN,  KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   },
-
-    // Row3
-    { KC_LEFT, KC_DOWN, KC_RGHT, FN3_KEY, FN2_F22, FN1_F21, KC_ENT,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO   }
-},
-
-/*
- * [6] CustomMode
+ * [4] CustomMode
  * Left side sends CustomMode key events over Raw HID v3.
  * Right side remains normal keyboard input.
  */

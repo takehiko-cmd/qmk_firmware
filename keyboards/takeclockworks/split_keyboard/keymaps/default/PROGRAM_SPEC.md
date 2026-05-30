@@ -58,16 +58,15 @@
 
 ## 4. レイヤー構成
 
-`keymap.c` には6レイヤーが定義されている。
+`keymap.c` には5レイヤーが定義されている。
 
 | レイヤー番号 | 定数 | 役割 |
 | --- | --- | --- |
 | 0 | `_BASE` | 通常入力 |
-| 1 | `_FN1` | 記号 / 数字入力 |
-| 2 | `_FN2` | ファンクションキー / 記号入力 / Bootloader長押し |
-| 3 | `_BASE_MIRROR` | 片手ミラーモード用Base |
-| 4 | `_FN1_MIRROR` | 片手ミラーモード用Fn1 |
-| 5 | `_FN2_MIRROR` | 片手ミラーモード用Fn2 |
+| 1 | `_FN1` | 数字入力 |
+| 2 | `_FN2` | 記号入力 / Bootloader長押し |
+| 3 | `_FN3` | F1-F12入力 |
+| 4 | `_CUSTOM_MODE` | CustomMode用。Fn4復活時に使うため残している |
 
 内部的には、実際のレイヤー番号とは別に `active_slot` がある。
 
@@ -76,27 +75,28 @@
 | `SLOT_BASE` | Base |
 | `SLOT_FN1` | Fn1 |
 | `SLOT_FN2` | Fn2 |
+| `SLOT_FN3` | Fn3 |
 
-`is_mirror_mode` がfalseなら `_BASE` / `_FN1` / `_FN2` を使い、trueなら `_BASE_MIRROR` / `_FN1_MIRROR` / `_FN2_MIRROR` を使う。
+`active_slot` に応じて `_BASE` / `_FN1` / `_FN2` / `_FN3` を使う。
+`_CUSTOM_MODE` は `custom_mode_enabled` によって追加でon/offされる。
 
 ## 5. 独自キーコード
 
 | キーコード | 役割 |
 | --- | --- |
-| `FN1_F21` | 押下中だけFn1 / Fn1 Mirrorを有効化 |
-| `FN2_F22` | 押下中だけFn2 / Fn2 Mirrorを有効化 |
-| `FN3_KEY` | 押下中だけミラーモードを有効化 |
+| `FN1_F21` | 押下中だけFn1を有効化 |
+| `FN2_F22` | 押下中だけFn2を有効化 |
+| `FN3_KEY` | 押下中だけFn3を有効化 |
 | `FN4_CUSTOM` | CustomMode切替 |
 | `BOOT_HOLD` | 長押しでブートローダーへ入る |
+
+`FN4_CUSTOM` は現行のBase/Fn1/Fn2配置からは外しているが、将来復活できるようキーコード、処理、CustomModeレイヤーは残している。
 
 ## 6. タイミング定数
 
 | 定数 | 値 | 意味 |
 | --- | --- | --- |
-| `F_KEY_DELAY_MS` | 500 ms | F1-F12を長押し扱いにする時間 |
 | `BOOT_KEY_DELAY_MS` | 1000 ms | Bootloader起動に必要な長押し時間 |
-| `F_KEY_COUNT` | 12 | F1-F12の数 |
-| `RIGHT_SIDE_START_COL` | 7 | 右側キーの開始列 |
 
 ## 7. Fnキーの動作
 
@@ -105,14 +105,15 @@
 押下時:
 
 - `fn1_hold_count` を加算する。
-- `active_slot = SLOT_FN1` にする。ただしFn2が押されている場合はFn2を優先する。
-- `sync_layers()` で、現在の `is_mirror_mode` に応じて `_FN1` または `_FN1_MIRROR` へ同期する。
+- `active_slot = SLOT_FN1` にする。ただしFn2またはFn3が押されている場合は、より優先度の高いFnを使う。
+- `sync_layers()` で `_FN1` へ同期する。
 
 離上時:
 
 - `fn1_hold_count` を0未満にならないよう減算する。
-- Fn2が押されていれば `active_slot = SLOT_FN2` にする。
-- Fn2が押されておらずFn1も残っていなければ `active_slot = SLOT_BASE` に戻す。
+- Fn3が押されていれば `active_slot = SLOT_FN3` にする。
+- Fn3が押されておらずFn2が押されていれば `active_slot = SLOT_FN2` にする。
+- 他のFnが押されていなければ `active_slot = SLOT_BASE` に戻す。
 - `FN1_F21` 単体では `KC_F21` を送信しない。
 
 ### 7.2 `FN2_F22`
@@ -120,110 +121,59 @@
 押下時:
 
 - `fn2_hold_count` を加算する。
-- `active_slot = SLOT_FN2` にする。
-- `sync_layers()` で、現在の `is_mirror_mode` に応じて `_FN2` または `_FN2_MIRROR` へ同期する。
+- `active_slot = SLOT_FN2` にする。ただしFn3が押されている場合はFn3を優先する。
+- `sync_layers()` で `_FN2` へ同期する。
 
 離上時:
 
 - `fn2_hold_count` を0未満にならないよう減算する。
-- Fn1が押されていれば `active_slot = SLOT_FN1` に戻す。
+- Fn3が押されていれば `active_slot = SLOT_FN3` にする。
+- Fn3が押されておらずFn1が押されていれば `active_slot = SLOT_FN1` に戻す。
 - Fn1も押されていなければ `active_slot = SLOT_BASE` に戻す。
 - `FN2_F22` 単体では `KC_F22` を送信しない。
 
-### 7.3 Fn1 / Fn2の同時押し
+### 7.3 `FN3_KEY`
 
-Fn1とFn2が同時に押されている場合はFn2を優先する。
+押下時:
 
-- Fn1押下中にFn2を押すとFn2へ切り替わる。
+- `fn3_hold_count` を加算する。
+- `active_slot = SLOT_FN3` にする。
+- `sync_layers()` で `_FN3` へ同期する。
+
+離上時:
+
+- `fn3_hold_count` を0未満にならないよう減算する。
+- Fn2が押されていれば `active_slot = SLOT_FN2` に戻す。
+- Fn2が押されておらずFn1が押されていれば `active_slot = SLOT_FN1` に戻す。
+- どのFnキーも押されていなければ `active_slot = SLOT_BASE` に戻す。
+
+### 7.4 Fnキーの同時押し
+
+Fn1、Fn2、Fn3の押下状態が同時に残っている場合は、内部的にFn3を最優先し、次にFn2、最後にFn1を優先する。
+
+- Fn3を離してFn2が残っている場合はFn2へ戻る。
 - Fn2を離してFn1が残っている場合はFn1へ戻る。
-- Fn1とFn2の両方を離すとBaseへ戻る。
-- 左右に同じFnキーが複数あるため、状態はboolではなく `fn1_hold_count` / `fn2_hold_count` で管理する。
+- すべてのFnキーを離すとBaseへ戻る。
+- 左右に同じFnキーが複数あるため、状態はboolではなく `fn1_hold_count` / `fn2_hold_count` / `fn3_hold_count` で管理する。
 
-## 8. `FN3_KEY` の動作
+## 8. ミラーモード削除
 
-`FN3_KEY` はミラーモード用の制御キー。
+ミラーモードは削除済み。
+Raw HIDの互換用フィールドとして、旧ミラー状態Byteとoverlay request Byteは残しているが、どちらも常に0を送る。
 
-FN3はトグルではなく、押している間だけミラー側へ切り替えるモーメンタリキーとして動作する。
+## 9. F1-F12の出力仕様
 
-押下時:
-
-- `fn3_press_count` を増やす。
-- 最初のFN3押下なら `mirror_mode_enabled = true`、`is_mirror_mode = true` にする。
-- `mirror_overlay_held = true` にする。
-- 現在の `active_slot` は維持する。
-- 対応するMirrorレイヤーへ同期する。
-- Raw HID status reportで `overlay_request = 1` を送る。
-
-解放時:
-
-- `fn3_press_count` を減らす。
-- まだ他のFN3が押されている場合は状態を維持する。
-- 最後のFN3解放なら `mirror_mode_enabled = false`、`is_mirror_mode = false` にする。
-- `mirror_overlay_held = false` にする。
-- 現在の `active_slot` は維持したまま通常側レイヤーへ同期する。
-- Raw HID status reportで `overlay_request = 0` を送る。
-
-送信されるオーバーレイ要求:
-
-| 状態 | overlay_request |
-| --- | --- |
-| FN3押下中 | `KLP_OVERLAY_MIRROR_KEYBOARD` |
-| FN3非押下中 | `KLP_OVERLAY_NONE` |
-
-`overlay_request` は一回限りの表示要求ではなく、FN3/Mirrorキーが押されている現在状態として扱う。
-そのため、FN3解放時は必ず `overlay_request = 0` のstatus reportを送る。
-
-## 9. ミラーモード仕様
-
-ミラーモードは右側の有効キー配置を左側へ写す片手入力用レイヤー。
-
-関連フラグ:
-
-| 変数 | 意味 |
-| --- | --- |
-| `mirror_mode_enabled` | ミラーレイヤーを有効にしているか |
-| `is_mirror_mode` | 現在Mirror側のキー配置を使用中か |
-| `mirror_overlay_held` | KeyboardLayerPeekへMirror overlayを表示させるためのFN3押下状態 |
-
-重要な制御:
-
-- 現在の実装ではFN3押下中だけ `mirror_mode_enabled == true` かつ `is_mirror_mode == true` になる。
-- FN3解放後は `mirror_mode_enabled == false` へ戻るため、物理右側キーは通常通り入力できる。
-- `mirror_mode_enabled == true` かつ `is_mirror_mode == false` のとき、右側キーはすべてブロックされる。
-- これは `should_block_right_side_key()` で判定される。
-- 条件は `record->event.key.col >= 7`。
-- Mirrorレイヤーでは右側列 `7` - `13` は基本的に `KC_NO`。
-
-目的:
-
-- FN3を押している間だけ「左側に写した右側面」を使い、離すと通常面へ戻す。
-
-## 10. F1-F12の遅延出力仕様
-
-`KC_F1` - `KC_F12` は通常の即時出力ではなく、500 msの遅延判定を行う。
+`KC_F1` - `KC_F12` はQMK標準処理で即時出力する。
 
 押下時:
-
-- 初回押下時にタイマー開始。
-- すぐにはキーコードを出力しない。
-
-500 ms以上押し続けた場合:
 
 - 対応するFキーを押下登録する。
-- 押している間は保持する。
-- 離すと解除する。
 
-500 ms未満で離した場合:
+離した時:
 
-- 何も出力しない。
+- 対応するFキーを解除する。
 
-500 ms以上経過してから、マトリクススキャンで押下登録される前に離した場合:
-
-- 対応するFキーをタップ送信する。
-
-この仕様により、Fキーは短い誤押下では発火せず、明確な長押しでのみ使われる。
-
-## 11. Ctrl + 矢印の変換仕様
+## 10. Ctrl + 矢印の変換仕様
 
 `KC_UP` / `KC_DOWN` / `KC_LEFT` / `KC_RGHT` は、Ctrl修飾中だけ別キーに変換される。
 
@@ -242,13 +192,13 @@ FN3はトグルではなく、押している間だけミラー側へ切り替�
 - 元の修飾状態を復元する。
 - 変換済みの矢印キーのreleaseイベントは消費する。
 
-## 12. Bootloader起動仕様
+## 11. Bootloader起動仕様
 
 `BOOT_HOLD` を1秒以上押すと `reset_keyboard()` を実行し、ブートローダーへ入る。
 
-現在の配置では `_FN2` レイヤーのRow0 Col6にある。
+現在の配置では `_FN2` レイヤーのRow2 Col0にある。
 
-## 13. Raw HID レイヤー状態通知仕様
+## 12. Raw HID レイヤー状態通知仕様
 
 Raw HIDにより、ホスト側アプリへ現在のキーボード状態を32バイトで送る。
 
@@ -262,11 +212,10 @@ Raw HIDにより、ホスト側アプリへ現在のキーボード状態を32�
 - `layer_state_set_user()`
 - `sync_layers()` 後
 - `matrix_scan_user()` 内で状態変化があれば送信
-- FN3押下 / 解放により `mirror_overlay_held` が変化した時
 
 ただし、前回のstatus reportと完全一致する場合は送信しない。
 
-### 13.1 レポート形式
+### 12.1 レポート形式
 
 サイズ: 32 bytes
 
@@ -276,10 +225,10 @@ Raw HIDにより、ホスト側アプリへ現在のキーボード状態を32�
 | 1 | ASCII `L` |
 | 2 | ASCII `P` |
 | 3 | プロトコルバージョン。現在は `2` |
-| 4 | `is_mirror_mode`。通常0、Mirror中1 |
-| 5 | `active_slot`。Base=0、Fn1=1、Fn2=2 |
+| 4 | 旧ミラー状態。現在は常に0 |
+| 5 | `active_slot`。Base=0、Fn1=1、Fn2=2、Fn3=3 |
 | 6 | アプリ用有効レイヤー番号 |
-| 7 | overlay request。`mirror_overlay_held` がtrueなら1、falseなら0 |
+| 7 | overlay request。現在は常に0 |
 | 8 | 押下キー数 |
 | 9以降 | 押下キーの row / col ペア |
 
@@ -290,37 +239,33 @@ Raw HIDにより、ホスト側アプリへ現在のキーボード状態を32�
 - `[row, col]` の順。
 - Byte 9から開始。
 
-### 13.2 アプリ用有効レイヤー番号
+### 12.2 アプリ用有効レイヤー番号
 
 `get_effective_app_layer()` は以下を返す。
 
 ```c
-(is_mirror_mode ? 3 : 0) + active_slot
+active_slot
 ```
 
 つまり:
 
 | 状態 | active_slot | app layer |
 | --- | --- | --- |
-| 通常Base | 0 | 0 |
-| 通常Fn1 | 1 | 1 |
-| 通常Fn2 | 2 | 2 |
-| Mirror Base | 0 | 3 |
-| Mirror Fn1 | 1 | 4 |
-| Mirror Fn2 | 2 | 5 |
+| Base | 0 | 0 |
+| Fn1 | 1 | 1 |
+| Fn2 | 2 | 2 |
+| Fn3 | 3 | 3 |
 
-### 13.3 overlay request
+### 12.3 overlay request
 
 | 値 | 定数 | 意味 |
 | --- | --- | --- |
-| 0 | `KLP_OVERLAY_NONE` | overlayなし。FN3/Mirrorキー非押下 |
-| 1 | `KLP_OVERLAY_MIRROR_KEYBOARD` | Mirrorキーボード表示。FN3/Mirrorキー押下中 |
-| 2 | `KLP_OVERLAY_LEFT_SIDE_ONLY` | 左側のみ表示要求 |
+| 0 | `KLP_OVERLAY_NONE` | overlayなし |
 
 protocol v2ではByte 7、protocol v3ではByte 8に同じ意味で格納する。
-FN3解放後は `KLP_OVERLAY_LEFT_SIDE_ONLY` ではなく `KLP_OVERLAY_NONE` を送る。
+現在は常に `KLP_OVERLAY_NONE` を送る。
 
-### 13.4 Split Keyboard時の注意
+### 12.4 Split Keyboard時の注意
 
 `SPLIT_KEYBOARD` が定義されている場合、Raw HID送信はmaster側だけで行う。
 
@@ -332,79 +277,70 @@ FN3解放後は `KLP_OVERLAY_LEFT_SIDE_ONLY` ではなく `KLP_OVERLAY_NONE` を
 #endif
 ```
 
-## 14. レイヤー同期仕様
+## 13. レイヤー同期仕様
 
-`sync_layers()` はQMKの実レイヤー状態を、内部状態 `active_slot` と `is_mirror_mode` に合わせる。
+`sync_layers()` はQMKの実レイヤー状態を、内部状態 `active_slot` に合わせる。
 
 処理内容:
 
 1. `syncing_layers = true` にする。
-2. `_FN1`, `_FN2`, `_BASE_MIRROR`, `_FN1_MIRROR`, `_FN2_MIRROR` をすべてoffにする。
-3. `is_mirror_mode` と `active_slot` に応じて必要なレイヤーをonにする。
+2. `_FN1`, `_FN2`, `_FN3` をすべてoffにする。
+3. `active_slot` に応じて必要なレイヤーをonにする。
 4. `syncing_layers = false` に戻す。
 5. Raw HIDで状態を通知する。
 
 `layer_state_set_user()` では、同期中でない場合だけQMKの実レイヤーから内部状態を復元してRaw HID通知する。
 
-## 15. キーマップ
+## 14. キーマップ
 
 表の列はQMKマトリクス列 `0` - `13` に対応する。
 
-### 15.1 Layer 0: Base
+### 14.1 Layer 0: Base
 
 | Row | Col0 | Col1 | Col2 | Col3 | Col4 | Col5 | Col6 | Col7 | Col8 | Col9 | Col10 | Col11 | Col12 | Col13 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 0 | ZKHK | Esc | Q | W | E | R | T | Y | U | I | O | P | - | Bspc |
+| 0 | PrintScreen | Esc | Q | W | E | R | T | Y | U | I | O | P | - | Bspc |
 | 1 | F2 | Tab | A | S | D | F | G | H | J | K | L | ; | Ins | Del |
 | 2 | F8 | LShift | Z | X | C | V | B | N | M | , | . | / | Up | RShift |
-| 3 | LCtrl | LGui | LAlt | FN3 | Fn2 Hold | Fn1 Hold | Space | Enter | Fn1 Hold | Fn2 Hold | FN4 | Left | Down | Right |
+| 3 | LGui | LCtrl | LAlt | Fn1 Hold | FN3 | ZKHK | Space | Enter | LCtrl | Bspc | Fn2 Hold | Left | Down | Right |
 
-### 15.2 Layer 1: Fn1
-
-| Row | Col0 | Col1 | Col2 | Col3 | Col4 | Col5 | Col6 | Col7 | Col8 | Col9 | Col10 | Col11 | Col12 | Col13 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 0 | ZKHK | Esc | ! | " | # | @ | - | = | 7 | 8 | 9 | * | / | Bspc |
-| 1 | F2 | Tab | % | & | ' | Ctrl+Z | Ctrl+Y | . | 4 | 5 | 6 | + | Ins | Del |
-| 2 | F8 | LShift | No | No | Ctrl+X | Ctrl+C | Ctrl+V | 0 | 1 | 2 | 3 | - | Up | RShift |
-| 3 | LCtrl | LGui | LAlt | FN3 | Fn2 Hold | Fn1 Hold | Space | Enter | Fn1 Hold | Fn2 Hold | FN4 | Left | Down | Right |
-
-### 15.3 Layer 2: Fn2
+### 14.2 Layer 1: Fn1
 
 | Row | Col0 | Col1 | Col2 | Col3 | Col4 | Col5 | Col6 | Col7 | Col8 | Col9 | Col10 | Col11 | Col12 | Col13 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 0 | ZKHK | Esc | PrintScreen | No | F1 | F2 | BOOT_HOLD | ( | ) | Yen | $ | No | No | Bspc |
-| 1 | F2 | Tab | F3 | F4 | F5 | F6 | F7 | [ | ] | No | No | No | Ins | Del |
-| 2 | F8 | LShift | F8 | F9 | F10 | F11 | F12 | ; | : | ^ | \| | No | Up | RShift |
-| 3 | LCtrl | LGui | LAlt | FN3 | Fn2 Hold | Fn1 Hold | Space | Enter | Fn1 Hold | Fn2 Hold | FN4 | Left | Down | Right |
+| 0 | PrintScreen | Esc | No | No | No | No | No | = | 7 | 8 | 9 | + | - | Bspc |
+| 1 | F2 | Tab | No | No | No | No | No | : | 4 | 5 | 6 | * | Ins | Del |
+| 2 | F8 | LShift | No | No | No | No | No | . | 1 | 2 | 3 | / | Up | RShift |
+| 3 | LGui | LCtrl | LAlt | Fn1 Hold | No | ZKHK | Space | Enter | 0 | Bspc | No | Left | Down | Right |
 
-### 15.4 Layer 3: Base Mirror
+### 14.3 Layer 2: Fn2
 
-| Row | Col0 | Col1 | Col2 | Col3 | Col4 | Col5 | Col6 | Col7-Col13 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 0 | Bspc | - | P | O | I | U | Y | No |
-| 1 | Del | Ins | ; | L | K | J | H | No |
-| 2 | RShift | Up | / | . | , | M | N | No |
-| 3 | Left | Down | Right | FN3 | Fn2 Hold | Fn1 Hold | Enter | No |
+| Row | Col0 | Col1 | Col2 | Col3 | Col4 | Col5 | Col6 | Col7 | Col8 | Col9 | Col10 | Col11 | Col12 | Col13 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | ZKHK | Esc | ! | " | # | @ | _ | No | No | No | No | No | No | Bspc |
+| 1 | PrintScreen | Tab | % | & | ' | ( | ) | No | No | No | No | No | Ins | Del |
+| 2 | BOOT_HOLD | LShift | Yen | $ | \| | [ | ] | No | No | No | No | No | Up | RShift |
+| 3 | LGui | LCtrl | LAlt | No | No | ZKHK | Space | Enter | No | Bspc | Fn2 Hold | Left | Down | Right |
 
-### 15.5 Layer 4: Fn1 Mirror
+### 14.4 Layer 3: Fn3
 
-| Row | Col0 | Col1 | Col2 | Col3 | Col4 | Col5 | Col6 | Col7-Col13 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 0 | Bspc | / | * | 7 | 8 | 9 | = | No |
-| 1 | Del | Ins | + | 4 | 5 | 6 | . | No |
-| 2 | RShift | Up | - | 1 | 2 | 3 | 0 | No |
-| 3 | Left | Down | Right | FN3 | Fn2 Hold | Fn1 Hold | Enter | No |
+| Row | Col0 | Col1 | Col2 | Col3 | Col4 | Col5 | Col6 | Col7 | Col8 | Col9 | Col10 | Col11 | Col12 | Col13 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | PrintScreen | Esc | No | No | No | No | No | F1 | F2 | F3 | F4 | F5 | No | Bspc |
+| 1 | No | Tab | No | No | No | No | No | F6 | F7 | F8 | F9 | F10 | Ins | Del |
+| 2 | BOOT_HOLD | LShift | No | No | No | No | No | F11 | F12 | No | No | No | Up | RShift |
+| 3 | LGui | LCtrl | LAlt | No | FN3 | No | Space | Enter | LCtrl | Bspc | No | Left | Down | Right |
 
-### 15.6 Layer 5: Fn2 Mirror
+### 14.5 Layer 4: CustomMode
 
-| Row | Col0 | Col1 | Col2 | Col3 | Col4 | Col5 | Col6 | Col7-Col13 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 0 | Bspc | No | No | $ | Yen | ) | ( | No |
-| 1 | Del | Ins | No | No | No | ] | [ | No |
-| 2 | RShift | Up | No | \| | ^ | : | ; | No |
-| 3 | Left | Down | Right | FN3 | Fn2 Hold | Fn1 Hold | Enter | No |
+| Row | Col0 | Col1 | Col2 | Col3 | Col4 | Col5 | Col6 | Col7 | Col8 | Col9 | Col10 | Col11 | Col12 | Col13 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | Bspc | Esc | Custom00 | Custom01 | Custom02 | Custom03 | Custom04 | = | 7 | 8 | 9 | * | / | Bspc |
+| 1 | Tab | Tab | Custom10 | Custom11 | Custom12 | Custom13 | Custom14 | . | 4 | 5 | 6 | + | Ins | Del |
+| 2 | LShift | LShift | Custom20 | Custom21 | Custom22 | Custom23 | Custom24 | 0 | 1 | 2 | 3 | - | Up | RShift |
+| 3 | Enter | LGui | LAlt | No | Fn2 Hold | Fn1 Hold | Space | Enter | Fn1 Hold | Fn2 Hold | FN4 | Left | Down | Right |
 
-## 16. 日本語配列キー
+## 15. 日本語配列キー
 
 `keymap.c` は `keymap_japanese.h` をincludeしており、以下の日本語配列キーコードを使う。
 
@@ -436,23 +372,21 @@ FN3解放後は `KLP_OVERLAY_LEFT_SIDE_ONLY` ではなく `KLP_OVERLAY_NONE` を
 - `JP_TILD`: ~
 - `JP_PIPE`: |
 
-## 17. 主要関数の役割
+## 16. 主要関数の役割
 
 | 関数 | 役割 |
 | --- | --- |
-| `process_record_user()` | 全キー入力の前処理。右側ブロック、Ctrl矢印変換、Fキー遅延、独自キー処理を行う |
-| `matrix_scan_user()` | F1-F12長押し判定、Bootloader判定、Raw HID状態通知を行う |
+| `process_record_user()` | 全キー入力の前処理。Ctrl矢印変換、独自キー処理を行う |
+| `matrix_scan_user()` | Bootloader判定、Raw HID状態通知を行う |
 | `layer_state_set_user()` | QMKレイヤー変化から内部状態を同期する |
 | `keyboard_post_init_user()` | 起動後にRaw HID状態通知を行う |
 | `sync_layers()` | 内部状態に合わせてQMKレイヤーをon/offする |
-| `set_status_from_layer()` | QMKの最高レイヤーから `active_slot` とミラー状態を復元する |
-| `send_keyboard_layer_status()` | Raw HID状態通知を送る。`overlay_request` は `mirror_overlay_held` から作る |
-| `handle_momentary_fn_key()` | FN1/FN2の押下中のみ有効なレイヤー切替処理 |
-| `handle_fn3_key()` | FN3の押下中だけミラー側へ切り替える処理 |
-| `handle_delayed_f_key()` | F1-F12の遅延出力処理 |
+| `set_status_from_layer()` | QMKの最高レイヤーから `active_slot` を復元する |
+| `send_keyboard_layer_status()` | Raw HID状態通知を送る |
+| `handle_momentary_fn_key()` | FN1/FN2/FN3の押下中のみ有効なレイヤー切替処理 |
 | `handle_ctrl_arrow()` | Ctrl+矢印をPage/Home/End系へ変換 |
 
-## 18. ビルド関連
+## 17. ビルド関連
 
 `rules.mk` の主な設定:
 
@@ -467,7 +401,7 @@ RAW_ENABLE = yes
 
 このキーボードは標準マトリクスではなく `matrix.c` を追加して独自スキャンする。
 
-## 19. ChatGPTへ依頼するときの要約文
+## 18. ChatGPTへ依頼するときの要約文
 
 以下を別のChatGPTに渡すと、現在のプログラムの前提が伝わりやすい。
 
@@ -476,15 +410,14 @@ RAW_ENABLE = yes
 左右それぞれMCP23017系I2C GPIOエキスパンダを使い、左0x20、右0x21としてmatrix.cで独自スキャンしています。
 左側はQMK列0-6、右側はQMK列7-13です。
 
-keymap.cにはBase/Fn1/Fn2と、それぞれのMirror版の合計6レイヤーがあります。
-FN1_F21とFN2_F22は押している間だけFn1/Fn2レイヤーを有効にするモーメンタリキーです。Fn2はFn1より優先され、F21/F22キーイベントは送信しません。
-FN3_KEYはミラーモード制御で、押している間だけ左側ミラー面へ切り替え、離すと通常面へ戻ります。
-FN3を離した後は物理右側キーも通常通り入力できます。
+keymap.cにはBase/Fn1/Fn2/Fn3と、将来Fn4復活時に使うCustomModeレイヤーがあります。
+FN1_F21、FN2_F22、FN3_KEYは押している間だけ対応するFnレイヤーを有効にするモーメンタリキーです。優先順位はFn3、Fn2、Fn1の順で、F21/F22キーイベントは送信しません。
+ミラーモードは削除済みです。
 
-F1-F12は500ms以上押したときだけ出力する遅延キーになっています。
+F1-F12はQMK標準処理で即時出力します。
 Ctrl+矢印はCtrlを一時的に外して、Up=PageUp、Down=PageDown、Left=Home、Right=Endへ変換します。
 FN2上のBOOT_HOLDは1秒長押しでreset_keyboard()します。
 
 Raw HIDが有効で、32バイトのKLPレポートをホストへ送ります。
-レポートは先頭3バイトが'K','L','P'、バージョン2、ミラー状態、active_slot、アプリ用有効レイヤー、overlay request、押下キー数、row/colペアです。
+レポートは先頭3バイトが'K','L','P'、バージョン2、旧ミラー状態、active_slot、アプリ用有効レイヤー、overlay request、押下キー数、row/colペアです。旧ミラー状態とoverlay requestは常に0です。
 ```
